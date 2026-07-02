@@ -50,7 +50,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
+import re
 import sys
 import textwrap
 from pathlib import Path
@@ -87,6 +89,7 @@ RUTA_RIOS_110M = CARPETA_DATA / "ne_110m_rivers_lake_centerlines.geojson"
 RUTA_RIOS_50M = CARPETA_DATA / "ne_50m_rivers_lake_centerlines.geojson"
 
 # --- Textos del banner y del pie --------------------------------------------
+NOMBRE_PROYECTO = "P.A.M.P.A."  # se muestra al comienzo del banner superior
 TITULO_BANNER = "Alerta por Clima Frío y Heladas"
 SUBTITULO_BANNER = "Válido a las 24hs del día 03/07/26"
 TITULO_LEYENDA_PIE = "Probabilidad Máxima de Superar el Criterio de Aviso"
@@ -122,31 +125,48 @@ COLOR_BANNER_BORDE = "#000000"
 NIVELES_ALERTA = [
     {
         "id": "sin_riesgo",
-        "valores": ["sin riesgo", "ninguno", "sin alerta", "s/riesgo", "<10%", "bajo", "0"],
+        "valores": [
+            "sin riesgo", "ninguno", "sin alerta", "s/riesgo", "s/alerta",
+            "<10%", "bajo", "verde", "sin aviso", "normal", "nivel 0", "nivel0",
+        ],
         "etiqueta": "<10%",
         "color": "#ffffff",
     },
     {
         "id": "vigilancia",
-        "valores": ["vigilancia", "amarillo claro", "10-30%", "10 - 30%", "leve", "1"],
+        "valores": [
+            "vigilancia", "amarillo claro", "10-30%", "10 - 30%", "10 a 30%",
+            "leve", "nivel 1", "nivel1",
+        ],
         "etiqueta": "10-30%",
         "color": "#4fc3c8",
     },
     {
         "id": "alerta_amarilla",
-        "valores": ["amarillo", "alerta amarilla", "moderado", "30-50%", "30 - 50%", "2"],
+        "valores": [
+            "amarillo", "amarilla", "alerta amarilla", "aviso amarillo",
+            "moderado", "30-50%", "30 - 50%", "30 a 50%", "nivel 2", "nivel2",
+        ],
         "etiqueta": "30-50%",
         "color": "#fff066",
     },
     {
         "id": "alerta_roja",
-        "valores": ["rojo", "alerta roja", "severo", "50-80%", "50 - 80%", "naranja", "alerta naranja", "3"],
+        "valores": [
+            "rojo", "roja", "alerta roja", "aviso rojo", "severo",
+            "50-80%", "50 - 80%", "50 a 80%",
+            "naranja", "alerta naranja", "aviso naranja", "nivel 3", "nivel3",
+        ],
         "etiqueta": "50-80%",
         "color": "#e0342a",
     },
     {
         "id": "alerta_extrema",
-        "valores": [">80%", "extremo", "violeta", "morado", "critico", "crítico", "4"],
+        "valores": [
+            ">80%", "extremo", "extrema", "violeta", "morado", "purpura",
+            "púrpura", "critico", "crítico", "critica", "crítica",
+            "nivel 4", "nivel4",
+        ],
         "etiqueta": ">80%",
         "color": "#8a2be2",
     },
@@ -180,24 +200,88 @@ def normalizar_texto(txt) -> str:
     return txt
 
 
+# Mapeo directo para códigos numéricos de nivel (0 a 4), si la columna del
+# geojson usa enteros o floats (ej. 0, 1, 2, 3, 4 o "1.0", "2.0", etc.)
+# en vez de texto. Se maneja aparte para evitar falsos positivos por
+# comparación de substrings (ej. que el "0" de "sin riesgo" "matchee"
+# dentro de "10-30%").
+_ID_NIVEL_POR_INDICE = [
+    "sin_riesgo", "vigilancia", "alerta_amarilla", "alerta_roja", "alerta_extrema",
+]
+
+
+def _intentar_valor_numerico(valor_crudo):
+    """Si el valor crudo es interpretable como número (0, 1, 2, 3, 4 ó sus
+    variantes en float/string), devuelve el id de nivel correspondiente.
+    Si no es numérico, devuelve None."""
+    try:
+        numero = float(str(valor_crudo).strip().replace(",", "."))
+    except (TypeError, ValueError):
+        return None
+    if math.isnan(numero):
+        return None
+    indice = int(round(numero))
+    if 0 <= indice <= 4 and abs(numero - indice) < 1e-6:
+        return _ID_NIVEL_POR_INDICE[indice]
+    return None
+
+
+def _id_a_color(id_nivel: str) -> str:
+    for nivel in NIVELES_ALERTA:
+        if nivel["id"] == id_nivel:
+            return nivel["color"]
+    return COLOR_SIN_DATO
+
+
 def mapear_nivel_a_color(valor_crudo) -> tuple[str, str]:
     """Dado el valor crudo de la columna de nivel de alerta de un municipio,
     devuelve (id_nivel, color_hex) según la tabla NIVELES_ALERTA.
     Si no coincide con ningún nivel conocido, devuelve ("sin_dato", COLOR_SIN_DATO).
+
+    IMPORTANTE: la comparación se hace por COINCIDENCIA EXACTA de la palabra/
+    frase normalizada (no por "contiene"), para evitar falsos positivos como
+    que el candidato "0" matchee dentro de "10-30%", o que "amarillo" matchee
+    dentro de "amarillo claro" de otro nivel. Sólo se permite una coincidencia
+    "floja" (parcial, por palabra completa) como último recurso, cuando el
+    valor viene acompañado de texto extra (ej. "Alerta Roja - Heladas").
     """
+    if valor_crudo is None:
+        return "sin_dato", COLOR_SIN_DATO
+
+    # 1) Si es un código numérico (0-4), resolverlo directamente sin ambigüedad.
+    id_numerico = _intentar_valor_numerico(valor_crudo)
+    if id_numerico is not None:
+        return id_numerico, _id_a_color(id_numerico)
+
     v = normalizar_texto(valor_crudo)
     if not v:
         return "sin_dato", COLOR_SIN_DATO
+
+    # 2) Coincidencia EXACTA del texto completo (ignorando mayúsculas/tildes).
     for nivel in NIVELES_ALERTA:
         for candidato in nivel["valores"]:
             if normalizar_texto(candidato) == v:
                 return nivel["id"], nivel["color"]
-    # Coincidencia parcial (por si el valor viene con texto extra, ej. "Alerta Roja - Heladas")
+
+    # 3) Coincidencia por PALABRA COMPLETA dentro de una frase más larga
+    #    (ej. "Alerta Roja - Heladas" contiene la palabra "roja" completa).
+    #    Se usan límites de palabra (\b) para no matchear substrings sueltos.
+    #    Se evalúan los candidatos ordenados por longitud descendente para
+    #    priorizar coincidencias más específicas (ej. "amarillo claro" antes
+    #    que "amarillo").
+    candidatos_ordenados = []
     for nivel in NIVELES_ALERTA:
         for candidato in nivel["valores"]:
             c = normalizar_texto(candidato)
-            if c and (c in v or v in c):
-                return nivel["id"], nivel["color"]
+            if c and not c.replace(".", "").isdigit():  # los numéricos ya se resolvieron arriba
+                candidatos_ordenados.append((len(c), c, nivel["id"], nivel["color"]))
+    candidatos_ordenados.sort(key=lambda t: t[0], reverse=True)
+
+    for _, c, nivel_id, color in candidatos_ordenados:
+        patron = r"\b" + re.escape(c) + r"\b"
+        if re.search(patron, v):
+            return nivel_id, color
+
     return "sin_dato", COLOR_SIN_DATO
 
 
@@ -330,11 +414,13 @@ def generar_mapa(
     titulo_banner: str,
     subtitulo_banner: str,
     titulo_leyenda: str,
+    nombre_proyecto: str,
     mostrar_nombres_municipios: bool,
     usar_alta_res: bool,
     ancho_pulgadas: float,
     alto_pulgadas: float,
     dpi: int,
+    debug: bool = False,
 ):
     print(f"[1/6] Leyendo geojson de alertas: {ruta_geojson}")
     gdf = cargar_geojson_alertas(ruta_geojson)
@@ -359,6 +445,18 @@ def generar_mapa(
         resultado = gdf[col_nivel].apply(mapear_nivel_a_color)
         gdf["_nivel_id"] = resultado.apply(lambda t: t[0])
         gdf["_color"] = resultado.apply(lambda t: t[1])
+
+    if debug and col_nivel is not None:
+        print("\n      ==== MODO DEBUG: valores crudos -> nivel asignado -> color ====")
+        tabla = (
+            gdf[[col_nivel, "_nivel_id", "_color"]]
+            .assign(**{col_nivel: gdf[col_nivel].astype(str)})
+            .drop_duplicates()
+            .sort_values(by="_nivel_id")
+        )
+        for _, fila in tabla.iterrows():
+            print(f"      valor crudo={fila[col_nivel]!r:25s} -> nivel={fila['_nivel_id']:16s} -> color={fila['_color']}")
+        print("      " + "=" * 65 + "\n")
 
     bounds = gdf.total_bounds  # minx, miny, maxx, maxy
     bounds_margen = calcular_margen(bounds, factor=0.10)
@@ -391,7 +489,10 @@ def generar_mapa(
         Rectangle((0, 0), 1, 1, facecolor=COLOR_BANNER_AZUL, edgecolor=COLOR_BANNER_BORDE,
                    linewidth=1.2, transform=ax_banner.transAxes, zorder=1)
     )
-    texto_banner = f"{titulo_banner} -- {subtitulo_banner}"
+    if nombre_proyecto:
+        texto_banner = f"{nombre_proyecto} -- {titulo_banner} -- {subtitulo_banner}"
+    else:
+        texto_banner = f"{titulo_banner} -- {subtitulo_banner}"
     ax_banner.text(
         0.015, 0.5, texto_banner, ha="left", va="center",
         fontsize=15, fontweight="bold", color="white",
@@ -561,9 +662,20 @@ def construir_parser() -> argparse.ArgumentParser:
         help=f"Título de la leyenda del pie (default: {TITULO_LEYENDA_PIE!r}).",
     )
     parser.add_argument(
+        "--nombre-proyecto", default=NOMBRE_PROYECTO,
+        help=f"Nombre del proyecto que se muestra al inicio del banner azul "
+             f"(default: {NOMBRE_PROYECTO!r}). Usá --nombre-proyecto \"\" para ocultarlo.",
+    )
+    parser.add_argument(
         "--mostrar-nombres", action="store_true",
         help="Muestra el nombre de cada municipio sobre el mapa (recomendado solo si "
              "hay pocas unidades geográficas, para no saturar el mapa).",
+    )
+    parser.add_argument(
+        "--debug", action="store_true",
+        help="Imprime en la terminal cada valor único de la columna de nivel de alerta "
+             "de tu geojson, junto con el nivel y color que el script le asignó. "
+             "Usalo para verificar/corregir el mapeo de colores con tu archivo real.",
     )
     parser.add_argument(
         "--alta-resolucion", action="store_true", default=True,
@@ -596,11 +708,13 @@ def main():
             titulo_banner=args.titulo,
             subtitulo_banner=args.subtitulo,
             titulo_leyenda=args.titulo_leyenda,
+            nombre_proyecto=args.nombre_proyecto,
             mostrar_nombres_municipios=args.mostrar_nombres,
             usar_alta_res=args.alta_resolucion,
             ancho_pulgadas=args.ancho,
             alto_pulgadas=args.alto,
             dpi=args.dpi,
+            debug=args.debug,
         )
     except Exception as e:
         print(f"ERROR: {e}", file=sys.stderr)
