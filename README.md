@@ -62,24 +62,27 @@ estética profesional y datos geográficos reales.
 
 ```
 ColdWarnings/
-├── index.html          # Estructura de la página (paneles, mapa, modal)
-├── css/
-│   └── style.css       # Estilos (tema tipo boletín oficial)
-└── js/
-    ├── state.js         # Modelo de datos, constantes (niveles, fenómenos, mapas base)
-    ├── geo-utils.js      # Parseo/normalización de GeoJSON, detección de campos, bbox, círculos
-    ├── map.js            # Todo lo relacionado a Leaflet (capas, dibujo, render de zonas)
-    ├── ui.js              # Lógica de interacción de tabs, formularios, listados
-    ├── export.js          # Exportación/importación .geojson, imagen .png, guardar/abrir proyecto
-    └── main.js            # Punto de entrada: inicializa todo y conecta los botones
+└── index.html   # Archivo único autocontenido: HTML + CSS + JavaScript embebidos.
+                   # Las únicas dependencias externas son librerías vía CDN
+                   # (Leaflet, Leaflet.draw, Turf.js, html2canvas) que requieren
+                   # conexión a internet la primera vez que se abre la página.
 ```
+
+Todo (estilos y lógica) vive **dentro de `index.html`**. Esto es intencional:
+al ser un solo archivo, podés descargarlo, moverlo, adjuntarlo por mail o
+abrirlo directamente con doble clic, sin depender de que otras carpetas
+(`css/`, `js/`) estén presentes al lado. Si ves la página con el texto
+amontonado y sin colores ni mapa, es señal de que estás abriendo una versión
+vieja/parcial del archivo — asegurate de usar siempre este `index.html`
+completo.
 
 ## 🚀 Cómo usarlo
 
-1. **Abrir `index.html`** en un navegador moderno (Chrome, Edge, Firefox).
-   No requiere build ni servidor — funciona incluso con doble clic (algunos
-   navegadores pueden pedir permisos de archivo local; si eso ocurre, servilo
-   con cualquier servidor estático, por ejemplo `python3 -m http.server`).
+1. **Abrir `index.html`** en un navegador moderno (Chrome, Edge, Firefox),
+   con conexión a internet (para las librerías vía CDN y los mapas base).
+   No requiere build ni servidor — funciona con doble clic. Si tu navegador
+   bloquea la carga de archivos locales por política de seguridad, servilo
+   con cualquier servidor estático, por ejemplo `python3 -m http.server`.
 
 2. **Pestaña "1. Geodatos":**
    - Cargá el `.geojson` de municipios/departamentos de tu provincia (podés

@@ -12,7 +12,348 @@
 <!-- Leaflet.draw -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
 
-<link rel="stylesheet" href="css/style.css" />
+<style>
+/* =========================================================
+   ColdWarnings — Sistema de Outlooks y Alertas Meteorológicas
+   Hoja de estilos principal
+   ========================================================= */
+
+:root{
+  --navy: #0b2148;
+  --navy-2: #123166;
+  --navy-3: #1a4380;
+  --ink: #101826;
+  --paper: #f4f6f9;
+  --card: #ffffff;
+  --border: #d7dde6;
+  --border-strong: #b7c1cf;
+  --muted: #5b6675;
+  --accent: #1a4380;
+  --accent-2: #2f6fd6;
+
+  --lvl-none: #ffffff;
+  --lvl-advisory: #ffd966;   /* amarillo */
+  --lvl-watch: #ffb84d;      /* naranja claro / vigilancia */
+  --lvl-warning: #ff8c00;    /* naranja */
+  --lvl-emergency: #e0342a;  /* rojo */
+  --lvl-extreme: #7a1fa2;    /* violeta / extremo */
+
+  --radius: 8px;
+  --shadow-1: 0 1px 3px rgba(16,24,38,.12);
+  --shadow-2: 0 4px 16px rgba(16,24,38,.18);
+}
+
+*{ box-sizing: border-box; }
+html,body{ margin:0; padding:0; height:100%; }
+body{
+  font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 14px;
+}
+
+#app{ display:flex; flex-direction:column; height:100vh; }
+
+button, input, select, textarea{ font-family: inherit; font-size: 13px; }
+
+code{
+  background:#eef1f5; padding:1px 5px; border-radius:4px; font-size:12px;
+}
+
+/* ================= TOPBAR ================= */
+#topbar{
+  display:flex; align-items:center; gap:16px;
+  background: linear-gradient(90deg, var(--navy), var(--navy-3));
+  color:#fff; padding:8px 16px;
+  box-shadow: var(--shadow-2);
+  flex: 0 0 auto;
+  z-index: 20;
+}
+.topbar-brand{ display:flex; align-items:center; gap:10px; }
+.brand-mark{
+  width:38px; height:38px; border-radius:8px;
+  background:#fff; color:var(--navy);
+  display:flex; align-items:center; justify-content:center;
+  font-weight:800; font-size:15px; letter-spacing:.5px;
+  box-shadow: inset 0 0 0 2px var(--accent-2);
+}
+.brand-text h1{ margin:0; font-size:17px; font-weight:700; letter-spacing:.3px; }
+.brand-text p{ margin:0; font-size:11px; color:#c9d7ef; }
+.topbar-clock{
+  margin-left:auto; font-variant-numeric: tabular-nums;
+  font-size:13px; background:rgba(255,255,255,.08);
+  padding:5px 10px; border-radius:6px; border:1px solid rgba(255,255,255,.15);
+}
+.topbar-actions{ display:flex; gap:8px; }
+
+/* ================= LAYOUT ================= */
+#layout{ flex:1 1 auto; display:flex; min-height:0; }
+
+/* ================= SIDEBAR ================= */
+#sidebar{
+  width: 380px; flex: 0 0 380px;
+  background: var(--card);
+  border-right: 1px solid var(--border);
+  display:flex; flex-direction:column;
+  min-height:0;
+}
+.tabs{
+  display:flex; flex-wrap:wrap;
+  border-bottom:1px solid var(--border);
+  background:#eef1f6;
+}
+.tab-btn{
+  flex:1 1 33%;
+  border:none; background:transparent; cursor:pointer;
+  padding:10px 6px; font-size:11.5px; font-weight:600;
+  color:var(--muted); border-bottom:3px solid transparent;
+  transition:.15s;
+  white-space:nowrap;
+}
+.tab-btn:hover{ background:#e2e7ee; color:var(--ink); }
+.tab-btn.active{
+  color:var(--accent); border-bottom-color: var(--accent-2);
+  background:#fff;
+}
+.badge{
+  display:inline-block; min-width:16px; padding:0 5px;
+  border-radius:10px; background:var(--accent-2); color:#fff;
+  font-size:10px; font-weight:700; margin-left:3px;
+}
+
+.tab-panels{ flex:1 1 auto; overflow-y:auto; padding:16px; min-height:0; }
+.tab-panel{ display:none; }
+.tab-panel.active{ display:block; animation: fadein .12s ease; }
+@keyframes fadein{ from{opacity:.4;} to{opacity:1;} }
+
+.tab-panel h2{
+  font-size:14px; margin:0 0 4px; color:var(--navy);
+  border-bottom:2px solid var(--border); padding-bottom:6px;
+}
+.hint{ color:var(--muted); font-size:12px; line-height:1.5; margin:6px 0 14px; }
+
+.field-group{ margin-bottom:16px; }
+.field-group.two-col{ display:flex; gap:10px; }
+.field-group.two-col > div{ flex:1; }
+.field-group label{
+  display:block; font-weight:600; font-size:12px; margin-bottom:5px; color:var(--ink);
+}
+.field-group input[type=text],
+.field-group input[type=datetime-local],
+.field-group input[type=number],
+.field-group select,
+.field-group textarea{
+  width:100%; padding:7px 9px; border:1px solid var(--border-strong);
+  border-radius:6px; background:#fff; color:var(--ink);
+}
+.field-group textarea{ resize:vertical; font-family:inherit; }
+.field-group input:focus, .field-group select:focus, .field-group textarea:focus{
+  outline:2px solid var(--accent-2); outline-offset:1px;
+}
+
+.file-row{ display:flex; gap:8px; align-items:center; }
+.file-row input[type=file]{ flex:1; font-size:12px; }
+
+.status-line{
+  margin-top:6px; font-size:11.5px; color:var(--muted);
+  background:#f6f8fb; border:1px dashed var(--border-strong);
+  padding:6px 8px; border-radius:6px;
+}
+.status-line.ok{ color:#166534; background:#eafbf0; border-color:#8fd9ac; }
+.status-line.err{ color:#9f1c1c; background:#fdeeee; border-color:#f0a5a5; }
+
+/* ---- buttons ---- */
+.btn{
+  cursor:pointer; border-radius:6px; border:1px solid transparent;
+  padding:8px 12px; font-weight:600; font-size:12.5px;
+  transition:.12s; display:inline-flex; align-items:center; gap:6px; justify-content:center;
+}
+.btn:disabled{ opacity:.5; cursor:not-allowed; }
+.btn-block{ width:100%; margin-bottom:8px; }
+.btn-sm{ padding:5px 9px; font-size:11.5px; }
+.btn-xs{ padding:4px 8px; font-size:11px; }
+.btn-primary{ background:var(--accent); color:#fff; }
+.btn-primary:hover{ background:var(--navy-3); }
+.btn-success{ background:#16794f; color:#fff; }
+.btn-success:hover{ background:#125e3d; }
+.btn-outline{ background:#fff; border-color:var(--border-strong); color:var(--ink); }
+.btn-outline:hover{ background:#eef1f6; }
+.btn-ghost{ background:rgba(255,255,255,.12); color:#fff; border-color:rgba(255,255,255,.25); }
+#topbar .btn-ghost:hover{ background:rgba(255,255,255,.22); }
+.tab-panel .btn-ghost{ background:#fff; color:var(--muted); border:1px solid var(--border-strong); }
+.tab-panel .btn-ghost:hover{ background:#eef1f6; }
+
+/* ---- swatches for level selection ---- */
+.swatch-row{ display:flex; flex-wrap:wrap; gap:8px; }
+.swatch{
+  flex:1 1 auto; min-width:74px;
+  border:2px solid transparent; border-radius:6px;
+  padding:8px 6px; text-align:center; cursor:pointer;
+  color:#1a1a1a; font-weight:700; font-size:11.5px;
+  box-shadow: var(--shadow-1);
+}
+.swatch.selected{ border-color: var(--ink); outline:2px solid rgba(0,0,0,.35); }
+.swatch small{ display:block; font-weight:500; font-size:9.5px; opacity:.85; }
+
+/* ---- selection modes ---- */
+.mode-row{ display:flex; gap:6px; }
+.mode-btn{
+  flex:1; padding:8px 4px; border:1px solid var(--border-strong);
+  background:#fff; border-radius:6px; cursor:pointer; font-size:11.5px; font-weight:600;
+}
+.mode-btn.active{ background:var(--accent); color:#fff; border-color:var(--accent); }
+
+.muni-list{
+  max-height:220px; overflow-y:auto; border:1px solid var(--border);
+  border-radius:6px; margin-top:6px; background:#fbfcfe;
+}
+.muni-item{
+  display:flex; align-items:center; gap:8px;
+  padding:6px 8px; border-bottom:1px solid #eef1f6; font-size:12px; cursor:pointer;
+}
+.muni-item:hover{ background:#eef4ff; }
+.muni-item.checked{ background:#e4edff; font-weight:600; }
+.muni-item input{ pointer-events:none; }
+.mini-actions{ display:flex; gap:8px; margin-top:8px; }
+.mini-actions .btn{ flex:1; }
+
+#input-radio-km{ width:100%; }
+
+.actions-sticky{ position:sticky; bottom:-16px; background:#fff; padding-top:8px; }
+
+/* ---- zone list (borrador) ---- */
+.zone-list, .bulletin-list{ display:flex; flex-direction:column; gap:8px; }
+.zone-card, .bulletin-card-item{
+  border:1px solid var(--border); border-radius:8px; padding:10px 12px;
+  background:#fbfcfe;
+}
+.zone-card-head{ display:flex; align-items:center; gap:8px; }
+.zone-color-dot{ width:14px; height:14px; border-radius:50%; flex:0 0 auto; border:1px solid rgba(0,0,0,.25); }
+.zone-card-title{ font-weight:700; font-size:12.5px; flex:1; }
+.zone-card-sub{ font-size:11px; color:var(--muted); margin-top:2px; }
+.zone-card-actions{ display:flex; gap:6px; margin-top:8px; }
+.zone-card-actions .btn{ flex:1; }
+
+.bulletin-card-item h3{ margin:0 0 4px; font-size:13px; }
+.bulletin-card-item .meta{ font-size:11px; color:var(--muted); margin-bottom:6px; }
+.bulletin-card-item .zones-inline{ display:flex; flex-wrap:wrap; gap:4px; margin-bottom:8px; }
+.chip{
+  font-size:10.5px; font-weight:700; padding:2px 7px; border-radius:10px;
+  color:#1a1a1a; border:1px solid rgba(0,0,0,.15);
+}
+.bulletin-card-item .row-actions{ display:flex; gap:6px; }
+.bulletin-card-item .row-actions .btn{ flex:1; }
+.status-active{ color:#166534; font-weight:700; }
+.status-expired{ color:#9f1c1c; font-weight:700; }
+.status-scheduled{ color:#8a5b00; font-weight:700; }
+
+.stats-box{
+  font-size:12px; background:#f6f8fb; border:1px solid var(--border);
+  border-radius:6px; padding:8px 10px; line-height:1.6;
+}
+
+.search-results{
+  margin-top:4px; max-height:180px; overflow-y:auto;
+}
+.search-result-item{
+  padding:6px 8px; border-bottom:1px solid #eef1f6; cursor:pointer; font-size:12px;
+}
+.search-result-item:hover{ background:#eef4ff; }
+
+.extra-layer-list{ display:flex; flex-direction:column; gap:6px; margin-top:10px; }
+.extra-layer-item{
+  display:flex; align-items:center; gap:8px; font-size:12px;
+  border:1px solid var(--border); border-radius:6px; padding:6px 8px;
+}
+.extra-layer-item .sw{ width:12px; height:12px; border-radius:3px; }
+.extra-layer-item span{ flex:1; }
+
+/* ================= MAP COLUMN ================= */
+#mapcolumn{ flex:1 1 auto; display:flex; padding:12px; min-width:0; }
+#bulletin-card{
+  flex:1; display:flex; flex-direction:column;
+  background:#fff; border-radius:var(--radius); overflow:hidden;
+  box-shadow: var(--shadow-2); border:1px solid var(--border);
+  min-width:0;
+}
+
+#bulletin-banner{
+  background: linear-gradient(90deg, var(--navy), var(--navy-2));
+  color:#fff; padding:10px 16px; flex:0 0 auto;
+}
+.banner-line-1{ font-size:15px; font-weight:800; letter-spacing:.2px; }
+.banner-line-2{ font-size:11.5px; color:#c9d7ef; margin-top:2px; }
+
+#map-toolbar{
+  display:flex; justify-content:space-between; align-items:center;
+  padding:6px 10px; background:#eef1f6; border-bottom:1px solid var(--border);
+  flex:0 0 auto; flex-wrap:wrap; gap:6px;
+}
+.toolbar-group{ display:flex; gap:6px; flex-wrap:wrap; }
+
+#map{ flex:1 1 auto; min-height:0; background:#dbe4ee; }
+
+#bulletin-footer{
+  display:flex; justify-content:space-between; align-items:center; gap:12px;
+  padding:8px 14px; background:#f4f6f9; border-top:1px solid var(--border);
+  flex:0 0 auto; font-size:11px; color:var(--muted); flex-wrap:wrap;
+}
+.legend-swatches{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.legend-chip{
+  display:flex; align-items:center; gap:5px; font-weight:700; font-size:10.5px; color:#1a1a1a;
+}
+.legend-chip .sw{ width:12px; height:12px; border-radius:3px; border:1px solid rgba(0,0,0,.25); }
+.footer-credit{ text-align:right; }
+
+/* ================= MODAL ================= */
+#modal-overlay{
+  position:fixed; inset:0; background:rgba(10,16,28,.55);
+  display:flex; align-items:center; justify-content:center; z-index:1000;
+}
+#modal-overlay.hidden{ display:none; }
+#modal-box{
+  background:#fff; border-radius:10px; padding:20px 22px; max-width:520px; width:90%;
+  max-height:85vh; overflow-y:auto; position:relative; box-shadow: var(--shadow-2);
+}
+#modal-close{
+  position:absolute; top:10px; right:12px; border:none; background:none;
+  font-size:16px; cursor:pointer; color:var(--muted);
+}
+#modal-content h3{ margin-top:0; color:var(--navy); }
+#modal-content .field-group{ margin-bottom:12px; }
+
+/* ================= TOASTS ================= */
+#toast-container{
+  position:fixed; bottom:16px; right:16px; display:flex; flex-direction:column; gap:8px; z-index:2000;
+}
+.toast{
+  background:var(--navy); color:#fff; padding:10px 14px; border-radius:6px;
+  font-size:12.5px; box-shadow: var(--shadow-2); max-width:320px;
+  animation: toastin .18s ease;
+}
+.toast.err{ background:#9f1c1c; }
+.toast.ok{ background:#166534; }
+@keyframes toastin{ from{ transform:translateY(8px); opacity:0;} to{ transform:none; opacity:1;} }
+
+/* ================= LEAFLET tweaks ================= */
+.leaflet-popup-content{ font-size:12.5px; }
+.leaflet-popup-content b{ color: var(--navy); }
+.muni-label{
+  background:rgba(255,255,255,.85); border:1px solid rgba(0,0,0,.2);
+  border-radius:3px; padding:1px 4px; font-size:10px; font-weight:700; color:#111;
+  box-shadow:none; white-space:nowrap;
+}
+.muni-label::before{ display:none; }
+
+/* ================= RESPONSIVE ================= */
+@media (max-width: 980px){
+  #layout{ flex-direction:column; }
+  #sidebar{ width:100%; flex:0 0 auto; max-height:46vh; border-right:none; border-bottom:1px solid var(--border); }
+  #mapcolumn{ padding:8px; }
+  .topbar-brand p{ display:none; }
+}
+
+</style>
 </head>
 <body>
 <div id="app">
@@ -310,11 +651,2109 @@
 <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
 
 <!-- App -->
-<script src="js/state.js"></script>
-<script src="js/geo-utils.js"></script>
-<script src="js/map.js"></script>
-<script src="js/ui.js"></script>
-<script src="js/export.js"></script>
-<script src="js/main.js"></script>
+<script>
+/* ===== js/state.js ===== */
+/* =========================================================
+   ColdWarnings — state.js
+   Modelo de datos central + constantes de dominio.
+   No depende de Leaflet ni del DOM: es puro estado + helpers.
+   ========================================================= */
+
+(function (global) {
+  "use strict";
+
+  // ---------------------------------------------------------
+  // Constantes de dominio
+  // ---------------------------------------------------------
+
+  // Niveles estilo SMN (avisos por color)
+  const NIVELES_AVISO = [
+    { id: "vigilancia", label: "Vigilancia",  short: "VIG", color: "#8fd694", ink: "#123" },
+    { id: "amarillo",   label: "Alerta Amarilla", short: "AMA", color: "#ffd966", ink: "#1a1a1a" },
+    { id: "naranja",    label: "Alerta Naranja",  short: "NAR", color: "#ff8c00", ink: "#1a1a1a" },
+    { id: "rojo",       label: "Alerta Roja",     short: "ROJ", color: "#e0342a", ink: "#ffffff" },
+  ];
+
+  // Niveles estilo outlook probabilístico NWS (probabilidad de superar criterio)
+  const NIVELES_PROB = [
+    { id: "p10",  label: "< 10%",   short: "<10%",  color: "#ffffff", ink: "#1a1a1a" },
+    { id: "p30",  label: "10 – 30%", short: "10-30", color: "#4fc3c8", ink: "#1a1a1a" },
+    { id: "p50",  label: "30 – 50%", short: "30-50", color: "#fff066", ink: "#1a1a1a" },
+    { id: "p80",  label: "50 – 80%", short: "50-80", color: "#e0342a", ink: "#ffffff" },
+    { id: "pmax", label: "> 80%",    short: ">80",   color: "#8a2be2", ink: "#ffffff" },
+  ];
+
+  const FENOMENOS = [
+    "Tormentas fuertes",
+    "Tormentas severas / granizo",
+    "Viento fuerte",
+    "Viento Zonda",
+    "Nevada",
+    "Tormenta invernal (nieve + viento)",
+    "Ola de calor",
+    "Ola de frío / helada",
+    "Lluvias intensas / anegamiento",
+    "Crecida / desborde de río",
+    "Niebla densa",
+    "Riesgo de incendio forestal",
+    "Otro (especificar)",
+  ];
+
+  const BASEMAPS = [
+    { id: "carto_light", label: "Claro (CARTO)" },
+    { id: "osm", label: "Calles (OSM)" },
+    { id: "esri_sat", label: "Satélite (Esri)" },
+    { id: "carto_dark", label: "Oscuro (CARTO)" },
+  ];
+
+  // Bounding box aproximado de Argentina continental + insular
+  const ARGENTINA_BOUNDS = [
+    [-55.3, -73.6],
+    [-21.7, -53.5],
+  ];
+
+  // ---------------------------------------------------------
+  // Estado global de la aplicación
+  // ---------------------------------------------------------
+
+  const state = {
+    // Geodatos base (cargados por el usuario)
+    provincia: {
+      raw: null,      // GeoJSON original
+      nombreField: null,
+    },
+    municipios: {
+      raw: null,          // GeoJSON original
+      nombreField: null,  // campo detectado/elegido para el nombre
+      idField: null,
+      features: [],       // normalizado: [{id, nombre, feature, bbox, centroid}]
+    },
+
+    // Capas extra decorativas
+    extraLayers: [], // [{id, name, color, data}]
+
+    // Selección activa en la pestaña "Nueva zona"
+    editor: {
+      editingZonaId: null,          // si !null, se está editando una zona ya agregada al borrador
+      tipoProducto: "nivel",        // "nivel" | "probabilidad"
+      nivelId: NIVELES_AVISO[1].id, // por defecto Amarillo
+      fenomeno: FENOMENOS[0],
+      fenomenoOtro: "",
+      detalle: "",
+      modoSeleccion: "municipios",  // "municipios" | "draw" | "circulo"
+      municipioIdsSel: new Set(),
+      circuloPendiente: null,       // {lat,lng}
+      circuloRadioKm: 25,
+      circulosAgregados: [],        // [{lat,lng,radioKm}]
+    },
+
+    // Boletín en construcción
+    borrador: {
+      titulo: "",
+      desde: "",
+      hasta: "",
+      emisor: "Servicio Meteorológico Nacional",
+      resumen: "",
+      zonas: [], // [{id, nivelId, tipoProducto, fenomeno, detalle, modoSeleccion, municipios:[{id,nombre}], geometries:[GeoJSON geometry], color}]
+    },
+
+    // Boletines publicados
+    bulletins: [], // [{id, titulo, desde, hasta, emisor, resumen, zonas:[...], publicadoEn}]
+    featuredBulletinId: null,
+  };
+
+  // ---------------------------------------------------------
+  // Helpers genéricos
+  // ---------------------------------------------------------
+
+  function uid(prefix) {
+    return (prefix || "id") + "_" + Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-4);
+  }
+
+  function getNivelDef(tipoProducto, nivelId) {
+    const list = tipoProducto === "probabilidad" ? NIVELES_PROB : NIVELES_AVISO;
+    return list.find((n) => n.id === nivelId) || list[0];
+  }
+
+  function nivelRank(tipoProducto, nivelId) {
+    const list = tipoProducto === "probabilidad" ? NIVELES_PROB : NIVELES_AVISO;
+    const idx = list.findIndex((n) => n.id === nivelId);
+    return idx === -1 ? 0 : idx;
+  }
+
+  function isBulletinActive(b) {
+    const now = Date.now();
+    const desde = b.desde ? new Date(b.desde).getTime() : null;
+    const hasta = b.hasta ? new Date(b.hasta).getTime() : null;
+    if (desde && now < desde) return "scheduled";
+    if (hasta && now > hasta) return "expired";
+    return "active";
+  }
+
+  function resetEditorSelection() {
+    state.editor.municipioIdsSel = new Set();
+    state.editor.circuloPendiente = null;
+    state.editor.circulosAgregados = [];
+    state.editor.editingZonaId = null;
+  }
+
+  // Namespace expuesto
+  global.CW = global.CW || {};
+  global.CW.state = state;
+  global.CW.constants = {
+    NIVELES_AVISO,
+    NIVELES_PROB,
+    FENOMENOS,
+    BASEMAPS,
+    ARGENTINA_BOUNDS,
+  };
+  global.CW.util = global.CW.util || {};
+  Object.assign(global.CW.util, {
+    uid,
+    getNivelDef,
+    nivelRank,
+    isBulletinActive,
+    resetEditorSelection,
+  });
+})(window);
+
+
+/* ===== js/geo-utils.js ===== */
+/* =========================================================
+   ColdWarnings — geo-utils.js
+   Utilidades de geoprocesamiento: parseo de GeoJSON, detección
+   de campos de nombre/id, cálculo de bbox/centroides, generación
+   de círculos, y armado de features para exportación.
+   ========================================================= */
+
+(function (global) {
+  "use strict";
+
+  const NAME_FIELD_CANDIDATES = [
+    "nombre", "NOMBRE", "Nombre",
+    "nam", "NAM",
+    "name", "NAME", "Name",
+    "nombre_completo", "NOMBRE_COMPLETO",
+    "municipio", "MUNICIPIO", "Municipio",
+    "departamen", "departamento", "DEPARTAMENTO", "Departamento",
+    "partido", "PARTIDO", "Partido",
+    "comuna", "COMUNA", "Comuna",
+    "nomdepto", "NOMDEPTO", "NOM_DEPTO",
+    "fna", "FNA",
+    "gna", "GNA",
+    "label", "LABEL", "etiqueta",
+  ];
+
+  const ID_FIELD_CANDIDATES = [
+    "id", "ID", "Id",
+    "in1", "IN1",
+    "cod", "COD", "codigo", "CODIGO",
+    "coddepto", "COD_DEPTO", "coddpto",
+    "objectid", "OBJECTID",
+    "fid", "FID",
+  ];
+
+  function isFeatureCollection(obj) {
+    return obj && obj.type === "FeatureCollection" && Array.isArray(obj.features);
+  }
+
+  // Acepta FeatureCollection, Feature suelto, GeometryCollection o array de features
+  function normalizeToFeatureCollection(obj) {
+    if (!obj) return null;
+    if (isFeatureCollection(obj)) return obj;
+    if (obj.type === "Feature") return { type: "FeatureCollection", features: [obj] };
+    if (Array.isArray(obj.features)) return { type: "FeatureCollection", features: obj.features };
+    if (obj.type && obj.coordinates) {
+      // Geometry suelta
+      return { type: "FeatureCollection", features: [{ type: "Feature", properties: {}, geometry: obj }] };
+    }
+    if (Array.isArray(obj)) {
+      return { type: "FeatureCollection", features: obj };
+    }
+    return null;
+  }
+
+  function detectField(featureProps, candidates) {
+    for (const c of candidates) {
+      if (Object.prototype.hasOwnProperty.call(featureProps, c) && featureProps[c] !== null && featureProps[c] !== "") {
+        return c;
+      }
+    }
+    return null;
+  }
+
+  function detectNameField(fc) {
+    if (!fc || !fc.features || !fc.features.length) return null;
+    // Buscar en las primeras N features un campo consistente
+    const sample = fc.features.slice(0, 25);
+    const counts = {};
+    for (const f of sample) {
+      const props = f.properties || {};
+      const found = detectField(props, NAME_FIELD_CANDIDATES);
+      if (found) counts[found] = (counts[found] || 0) + 1;
+    }
+    let best = null, bestCount = 0;
+    for (const k in counts) {
+      if (counts[k] > bestCount) { best = k; bestCount = counts[k]; }
+    }
+    if (best) return best;
+
+    // Fallback: cualquier propiedad de tipo string, corta, presente en todas
+    const propsKeys = Object.keys(sample[0].properties || {});
+    for (const k of propsKeys) {
+      const allStrings = sample.every((f) => typeof (f.properties || {})[k] === "string");
+      if (allStrings) return k;
+    }
+    return null;
+  }
+
+  function detectIdField(fc) {
+    if (!fc || !fc.features || !fc.features.length) return null;
+    const sample = fc.features.slice(0, 25);
+    const counts = {};
+    for (const f of sample) {
+      const props = f.properties || {};
+      const found = detectField(props, ID_FIELD_CANDIDATES);
+      if (found) counts[found] = (counts[found] || 0) + 1;
+    }
+    let best = null, bestCount = 0;
+    for (const k in counts) {
+      if (counts[k] > bestCount) { best = k; bestCount = counts[k]; }
+    }
+    return best;
+  }
+
+  function getAllPropertyKeys(fc) {
+    const keys = new Set();
+    (fc.features || []).forEach((f) => {
+      Object.keys(f.properties || {}).forEach((k) => keys.add(k));
+    });
+    return Array.from(keys);
+  }
+
+  // Construye índice normalizado: [{id, nombre, feature, properties}]
+  function buildMunicipiosIndex(fc, nombreField, idField) {
+    const out = [];
+    (fc.features || []).forEach((f, i) => {
+      const props = f.properties || {};
+      const nombre = nombreField ? String(props[nombreField] ?? ("Sin nombre #" + i)) : ("Sin nombre #" + i);
+      const idRaw = idField ? props[idField] : null;
+      const id = idRaw !== null && idRaw !== undefined && idRaw !== "" ? String(idRaw) : ("gen_" + i);
+      out.push({
+        id,
+        nombre,
+        feature: f,
+        properties: props,
+      });
+    });
+    return out;
+  }
+
+  // Bounding box de un GeoJSON genérico (Feature, FeatureCollection o Geometry)
+  function computeBBox(geojson) {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    function walk(coords, depth) {
+      if (depth === 0) {
+        const [x, y] = coords;
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      } else {
+        coords.forEach((c) => walk(c, depth - 1));
+      }
+    }
+    function depthForType(type) {
+      switch (type) {
+        case "Point": return 0;
+        case "MultiPoint":
+        case "LineString": return 1;
+        case "MultiLineString":
+        case "Polygon": return 2;
+        case "MultiPolygon": return 3;
+        default: return 2;
+      }
+    }
+    function visitGeometry(geom) {
+      if (!geom) return;
+      if (geom.type === "GeometryCollection") {
+        (geom.geometries || []).forEach(visitGeometry);
+        return;
+      }
+      walk(geom.coordinates, depthForType(geom.type));
+    }
+    function visit(obj) {
+      if (!obj) return;
+      if (obj.type === "FeatureCollection") {
+        (obj.features || []).forEach(visit);
+      } else if (obj.type === "Feature") {
+        visitGeometry(obj.geometry);
+      } else if (obj.type) {
+        visitGeometry(obj);
+      }
+    }
+    visit(geojson);
+    if (!isFinite(minX)) return null;
+    return [[minY, minX], [maxY, maxX]]; // [[south,west],[north,east]] estilo Leaflet
+  }
+
+  // Genera un polígono circular aproximado (GeoJSON) dado centro (lat,lng) y radio en km
+  function circleToPolygon(lat, lng, radiusKm, points) {
+    points = points || 64;
+    const coords = [];
+    const earthRadiusKm = 6371;
+    const latRad = (lat * Math.PI) / 180;
+    for (let i = 0; i <= points; i++) {
+      const angle = (i * 2 * Math.PI) / points;
+      const dx = radiusKm * Math.cos(angle);
+      const dy = radiusKm * Math.sin(angle);
+      const dLat = dy / earthRadiusKm;
+      const dLng = dx / (earthRadiusKm * Math.cos(latRad));
+      const ptLat = lat + (dLat * 180) / Math.PI;
+      const ptLng = lng + (dLng * 180) / Math.PI;
+      coords.push([ptLng, ptLat]);
+    }
+    return { type: "Polygon", coordinates: [coords] };
+  }
+
+  // Une geometrías de un array de features en una sola FeatureCollection (para exportar zona)
+  function featuresToGeometryArray(features) {
+    return features.map((f) => f.geometry).filter(Boolean);
+  }
+
+  global.CW = global.CW || {};
+  global.CW.geo = {
+    isFeatureCollection,
+    normalizeToFeatureCollection,
+    detectNameField,
+    detectIdField,
+    getAllPropertyKeys,
+    buildMunicipiosIndex,
+    computeBBox,
+    circleToPolygon,
+    featuresToGeometryArray,
+  };
+})(window);
+
+
+/* ===== js/map.js ===== */
+/* =========================================================
+   ColdWarnings — map.js
+   Todo lo relacionado a Leaflet: mapa base, capas de provincia,
+   municipios, dibujo libre, círculos y render de zonas/boletines.
+   ========================================================= */
+
+(function (global) {
+  "use strict";
+
+  const CW = global.CW;
+  const { ARGENTINA_BOUNDS } = CW.constants;
+
+  let map = null;
+  let basemapLayer = null;
+  let currentBasemapId = "carto_light";
+
+  let provinciaLayer = null;
+  let municipiosLayer = null;      // capa base gris de todos los municipios
+  let municipiosLabelLayer = null; // capa de etiquetas (LayerGroup de marcadores divIcon)
+  let selectionHighlightLayer = null; // resalta municipios seleccionados en el editor
+
+  let drawnItems = null;           // FeatureGroup de leaflet-draw
+  let drawControl = null;
+
+  let circuloPreviewLayer = null;  // círculo(s) del editor
+  let circuloMarker = null;
+
+  const extraLayersById = {};      // id -> L.geoJSON layer
+
+  let zonesRenderLayer = null;     // capa que dibuja las zonas del boletín destacado / borrador preview
+  let previewZoneLayer = null;     // preview de la zona que se está armando (antes de agregarla)
+
+  const BASEMAP_DEFS = {
+    carto_light: {
+      url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+      attribution: '&copy; <a href="https://carto.com/attributions">CARTO</a> &copy; OpenStreetMap',
+    },
+    osm: {
+      url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+      attribution: "&copy; OpenStreetMap contributors",
+    },
+    esri_sat: {
+      url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      attribution: "Tiles &copy; Esri",
+    },
+    carto_dark: {
+      url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+      attribution: '&copy; <a href="https://carto.com/attributions">CARTO</a> &copy; OpenStreetMap',
+    },
+  };
+
+  function initMap() {
+    map = L.map("map", {
+      center: [-38.4, -63.6],
+      zoom: 4,
+      minZoom: 3,
+      maxZoom: 18,
+      zoomControl: true,
+      preferCanvas: true,
+    });
+
+    setBasemap(currentBasemapId);
+    fitToArgentina();
+
+    // FeatureGroup para dibujo libre
+    drawnItems = new L.FeatureGroup();
+    map.addLayer(drawnItems);
+
+    drawControl = new L.Control.Draw({
+      position: "topleft",
+      draw: {
+        polygon: { allowIntersection: true, showArea: true, shapeOptions: { color: "#1a4380" } },
+        polyline: false,
+        rectangle: { shapeOptions: { color: "#1a4380" } },
+        circle: false,
+        circlemarker: false,
+        marker: false,
+      },
+      edit: { featureGroup: drawnItems, remove: true },
+    });
+    // Sólo se agrega al mapa cuando el modo de selección sea "draw" (ver ui.js)
+
+    map.on(L.Draw.Event.CREATED, function (e) {
+      drawnItems.addLayer(e.layer);
+      if (CW.ui && CW.ui.onDrawChanged) CW.ui.onDrawChanged();
+    });
+    map.on(L.Draw.Event.EDITED, function () {
+      if (CW.ui && CW.ui.onDrawChanged) CW.ui.onDrawChanged();
+    });
+    map.on(L.Draw.Event.DELETED, function () {
+      if (CW.ui && CW.ui.onDrawChanged) CW.ui.onDrawChanged();
+    });
+
+    map.on("click", function (e) {
+      if (CW.ui && CW.ui.onMapClick) CW.ui.onMapClick(e.latlng);
+    });
+
+    zonesRenderLayer = L.layerGroup().addTo(map);
+    previewZoneLayer = L.layerGroup().addTo(map);
+    selectionHighlightLayer = L.layerGroup().addTo(map);
+    circuloPreviewLayer = L.layerGroup().addTo(map);
+    municipiosLabelLayer = L.layerGroup();
+
+    return map;
+  }
+
+  function getMap() { return map; }
+
+  function setBasemap(id) {
+    const def = BASEMAP_DEFS[id] || BASEMAP_DEFS.carto_light;
+    currentBasemapId = id;
+    if (basemapLayer) map.removeLayer(basemapLayer);
+    basemapLayer = L.tileLayer(def.url, {
+      attribution: def.attribution,
+      maxZoom: 19,
+      crossOrigin: true,
+    }).addTo(map);
+    basemapLayer.bringToBack();
+  }
+
+  function fitToArgentina() {
+    map.fitBounds(ARGENTINA_BOUNDS, { padding: [10, 10] });
+  }
+
+  function fitToBounds(bounds) {
+    if (!bounds) return;
+    map.fitBounds(bounds, { padding: [20, 20] });
+  }
+
+  // -------------------- Provincia (referencia) --------------------
+  function setProvinciaLayer(fc) {
+    clearProvinciaLayer();
+    if (!fc) return null;
+    provinciaLayer = L.geoJSON(fc, {
+      style: { color: "#123166", weight: 2.5, fillOpacity: 0.02, dashArray: "6,4" },
+      interactive: false,
+    }).addTo(map);
+    return provinciaLayer;
+  }
+  function clearProvinciaLayer() {
+    if (provinciaLayer) { map.removeLayer(provinciaLayer); provinciaLayer = null; }
+  }
+  function getProvinciaBounds() {
+    return provinciaLayer ? provinciaLayer.getBounds() : null;
+  }
+
+  // -------------------- Municipios (base) --------------------
+  function setMunicipiosLayer(indexed) {
+    clearMunicipiosLayer();
+    if (!indexed || !indexed.length) return null;
+
+    const fc = { type: "FeatureCollection", features: indexed.map((m) => m.feature) };
+    municipiosLayer = L.geoJSON(fc, {
+      style: function () {
+        return { color: "#7a8ba3", weight: 1, fillColor: "#c9d4e2", fillOpacity: 0.18 };
+      },
+      onEachFeature: function (feature, layer) {
+        const rec = indexed.find((m) => m.feature === feature);
+        if (!rec) return;
+        layer._cwId = rec.id;
+        layer._cwNombre = rec.nombre;
+        layer.bindTooltip(rec.nombre, { sticky: true });
+        layer.on("click", function (ev) {
+          L.DomEvent.stopPropagation(ev);
+          if (CW.ui && CW.ui.onMunicipioClicked) CW.ui.onMunicipioClicked(rec.id);
+        });
+        layer.on("mouseover", function () { layer.setStyle({ weight: 2, color: "#1a4380" }); });
+        layer.on("mouseout", function () {
+          if (!layer._cwSelected) layer.setStyle({ color: "#7a8ba3", weight: 1 });
+        });
+
+        // Etiqueta (marcador de texto) en el centroide, oculto salvo zoom alto
+        try {
+          const center = layer.getBounds().getCenter();
+          const marker = L.marker(center, {
+            icon: L.divIcon({ className: "muni-label", html: rec.nombre, iconSize: null }),
+            interactive: false,
+          });
+          municipiosLabelLayer.addLayer(marker);
+        } catch (e) { /* geometría inválida, ignorar etiqueta */ }
+      },
+    }).addTo(map);
+
+    updateLabelVisibility();
+    map.on("zoomend", updateLabelVisibility);
+
+    return municipiosLayer;
+  }
+
+  function clearMunicipiosLayer() {
+    if (municipiosLayer) { map.removeLayer(municipiosLayer); municipiosLayer = null; }
+    if (municipiosLabelLayer) { map.removeLayer(municipiosLabelLayer); municipiosLabelLayer.clearLayers(); }
+    clearSelectionHighlight();
+  }
+
+  function setLabelsVisible(visible) {
+    if (!municipiosLabelLayer) return;
+    if (visible) updateLabelVisibility();
+    else if (map.hasLayer(municipiosLabelLayer)) map.removeLayer(municipiosLabelLayer);
+  }
+
+  let labelsEnabled = true;
+  function updateLabelVisibility() {
+    if (!municipiosLabelLayer) return;
+    const show = labelsEnabled && map.getZoom() >= 8;
+    if (show && !map.hasLayer(municipiosLabelLayer)) municipiosLabelLayer.addTo(map);
+    if (!show && map.hasLayer(municipiosLabelLayer)) map.removeLayer(municipiosLabelLayer);
+  }
+  function setLabelsEnabled(enabled) {
+    labelsEnabled = enabled;
+    updateLabelVisibility();
+  }
+
+  function getMunicipiosBounds() {
+    return municipiosLayer ? municipiosLayer.getBounds() : null;
+  }
+
+  function eachMunicipioLayer(cb) {
+    if (!municipiosLayer) return;
+    municipiosLayer.eachLayer(cb);
+  }
+
+  function getVisibleMunicipioIds() {
+    const ids = [];
+    const bounds = map.getBounds();
+    eachMunicipioLayer((layer) => {
+      try {
+        if (bounds.intersects(layer.getBounds())) ids.push(layer._cwId);
+      } catch (e) { /* noop */ }
+    });
+    return ids;
+  }
+
+  // -------------------- Resaltado de selección (editor) --------------------
+  function clearSelectionHighlight() {
+    if (selectionHighlightLayer) selectionHighlightLayer.clearLayers();
+    eachMunicipioLayer((layer) => {
+      layer._cwSelected = false;
+      layer.setStyle({ color: "#7a8ba3", weight: 1, fillColor: "#c9d4e2", fillOpacity: 0.18 });
+    });
+  }
+
+  function setSelectedMunicipios(idSet, color) {
+    eachMunicipioLayer((layer) => {
+      const sel = idSet.has(layer._cwId);
+      layer._cwSelected = sel;
+      if (sel) {
+        layer.setStyle({ color: color || "#1a4380", weight: 2, fillColor: color || "#2f6fd6", fillOpacity: 0.45 });
+        layer.bringToFront();
+      } else {
+        layer.setStyle({ color: "#7a8ba3", weight: 1, fillColor: "#c9d4e2", fillOpacity: 0.18 });
+      }
+    });
+  }
+
+  // -------------------- Dibujo libre --------------------
+  function enableDrawControl(enable) {
+    if (!drawControl) return;
+    const onMap = !!drawControl._map;
+    if (enable && !onMap) map.addControl(drawControl);
+    if (!enable && onMap) map.removeControl(drawControl);
+  }
+
+  function getDrawnGeometries() {
+    const geoms = [];
+    drawnItems.eachLayer((layer) => {
+      const gj = layer.toGeoJSON();
+      if (gj && gj.geometry) geoms.push(gj.geometry);
+    });
+    return geoms;
+  }
+
+  function getDrawnCount() {
+    return drawnItems ? drawnItems.getLayers().length : 0;
+  }
+
+  function clearDrawnItems() {
+    if (drawnItems) drawnItems.clearLayers();
+  }
+
+  // -------------------- Círculo --------------------
+  function setCirculoPendingMarker(latlng) {
+    circuloPreviewLayer.clearLayers();
+    if (circuloMarker) circuloMarker = null;
+    if (!latlng) return;
+    circuloMarker = L.marker(latlng, { draggable: false }).addTo(circuloPreviewLayer);
+  }
+
+  function previewCirculo(latlng, radiusKm, color) {
+    circuloPreviewLayer.clearLayers();
+    if (!latlng) return;
+    L.marker(latlng).addTo(circuloPreviewLayer);
+    L.circle(latlng, {
+      radius: radiusKm * 1000,
+      color: color || "#1a4380",
+      fillColor: color || "#2f6fd6",
+      fillOpacity: 0.25,
+      weight: 2,
+    }).addTo(circuloPreviewLayer);
+  }
+
+  function renderAddedCirculos(circulos, color) {
+    (circulos || []).forEach((c) => {
+      L.circle([c.lat, c.lng], {
+        radius: c.radioKm * 1000,
+        color: color || "#1a4380",
+        fillColor: color || "#2f6fd6",
+        fillOpacity: 0.3,
+        weight: 2,
+        dashArray: "4,3",
+      }).addTo(circuloPreviewLayer);
+    });
+  }
+
+  function clearCirculoPreview() {
+    circuloPreviewLayer.clearLayers();
+    circuloMarker = null;
+  }
+
+  // -------------------- Render de zonas / boletines --------------------
+  function clearZonesRender() {
+    zonesRenderLayer.clearLayers();
+  }
+
+  function renderZonesOnMap(zonas) {
+    clearZonesRender();
+    const allBoundsLayers = [];
+    (zonas || []).forEach((zona) => {
+      const style = {
+        color: shadeColor(zona.colorHex, -25),
+        weight: 2,
+        fillColor: zona.colorHex,
+        fillOpacity: 0.55,
+      };
+      (zona.geometries || []).forEach((geom) => {
+        try {
+          const layer = L.geoJSON(geom, { style }).addTo(zonesRenderLayer);
+          layer.bindPopup(popupHtmlForZone(zona));
+          allBoundsLayers.push(layer);
+        } catch (e) { /* geometría inválida */ }
+      });
+    });
+    return allBoundsLayers;
+  }
+
+  function popupHtmlForZone(zona) {
+    const nivelLabel = zona.nivelLabel || "";
+    const municipiosTxt = (zona.municipiosNombres || []).slice(0, 12).join(", ");
+    const extra = (zona.municipiosNombres || []).length > 12 ? "…" : "";
+    return `<b>${escapeHtml(nivelLabel)}</b> — ${escapeHtml(zona.fenomeno || "")}<br>` +
+      (municipiosTxt ? `<i>${escapeHtml(municipiosTxt)}${extra}</i><br>` : "") +
+      (zona.detalle ? `<div style="margin-top:4px;max-width:240px;">${escapeHtml(zona.detalle)}</div>` : "");
+  }
+
+  function renderPreviewZone(geometries, color) {
+    previewZoneLayer.clearLayers();
+    (geometries || []).forEach((geom) => {
+      try {
+        L.geoJSON(geom, {
+          style: { color: shadeColor(color, -25), weight: 2, fillColor: color, fillOpacity: 0.4, dashArray: "5,5" },
+        }).addTo(previewZoneLayer);
+      } catch (e) { /* noop */ }
+    });
+  }
+
+  function clearPreviewZone() { previewZoneLayer.clearLayers(); }
+
+  function fitToZonesBounds(zonas) {
+    const group = L.featureGroup();
+    (zonas || []).forEach((zona) => {
+      (zona.geometries || []).forEach((geom) => {
+        try { L.geoJSON(geom).eachLayer((l) => group.addLayer(l)); } catch (e) { /* noop */ }
+      });
+    });
+    if (group.getLayers().length) map.fitBounds(group.getBounds(), { padding: [20, 20] });
+  }
+
+  // -------------------- Capas extra --------------------
+  function addExtraLayer(id, fc, color) {
+    const layer = L.geoJSON(fc, {
+      style: { color: color, weight: 2, fillColor: color, fillOpacity: 0.15 },
+      pointToLayer: function (feature, latlng) {
+        return L.circleMarker(latlng, { radius: 5, color: color, fillColor: color, fillOpacity: 0.8 });
+      },
+    }).addTo(map);
+    extraLayersById[id] = layer;
+    return layer;
+  }
+  function removeExtraLayer(id) {
+    const layer = extraLayersById[id];
+    if (layer) { map.removeLayer(layer); delete extraLayersById[id]; }
+  }
+
+  // -------------------- utils --------------------
+  function shadeColor(hex, percent) {
+    if (!hex) return "#333333";
+    hex = hex.replace("#", "");
+    if (hex.length === 3) hex = hex.split("").map((c) => c + c).join("");
+    const num = parseInt(hex, 16);
+    let r = (num >> 16) + percent;
+    let g = ((num >> 8) & 0x00ff) + percent;
+    let b = (num & 0x0000ff) + percent;
+    r = Math.max(Math.min(255, r), 0);
+    g = Math.max(Math.min(255, g), 0);
+    b = Math.max(Math.min(255, b), 0);
+    return "#" + (0x1000000 + r * 0x10000 + g * 0x100 + b).toString(16).slice(1);
+  }
+
+  function escapeHtml(str) {
+    return String(str || "").replace(/[&<>"']/g, (c) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+    }[c]));
+  }
+
+  CW.map = {
+    initMap,
+    getMap,
+    setBasemap,
+    fitToArgentina,
+    fitToBounds,
+
+    setProvinciaLayer,
+    clearProvinciaLayer,
+    getProvinciaBounds,
+
+    setMunicipiosLayer,
+    clearMunicipiosLayer,
+    getMunicipiosBounds,
+    eachMunicipioLayer,
+    getVisibleMunicipioIds,
+    setLabelsEnabled,
+
+    clearSelectionHighlight,
+    setSelectedMunicipios,
+
+    enableDrawControl,
+    getDrawnGeometries,
+    getDrawnCount,
+    clearDrawnItems,
+
+    setCirculoPendingMarker,
+    previewCirculo,
+    renderAddedCirculos,
+    clearCirculoPreview,
+
+    renderZonesOnMap,
+    renderPreviewZone,
+    clearPreviewZone,
+    clearZonesRender,
+    fitToZonesBounds,
+
+    addExtraLayer,
+    removeExtraLayer,
+
+    shadeColor,
+    escapeHtml,
+  };
+})(window);
+
+
+/* ===== js/ui.js ===== */
+/* =========================================================
+   ColdWarnings — ui.js
+   Toda la lógica de interacción del panel lateral: tabs, carga
+   de archivos, editor de zonas, borrador de boletín, listado de
+   boletines emitidos, capas extra y modales/toasts.
+   ========================================================= */
+
+(function (global) {
+  "use strict";
+
+  const CW = global.CW;
+  const S = CW.state;
+  const U = CW.util;
+  const G = CW.geo;
+  const C = CW.constants;
+
+  // ------------------------------------------------------------------
+  // Toasts
+  // ------------------------------------------------------------------
+  function toast(msg, type) {
+    const container = document.getElementById("toast-container");
+    const el = document.createElement("div");
+    el.className = "toast" + (type ? " " + type : "");
+    el.textContent = msg;
+    container.appendChild(el);
+    setTimeout(() => { el.remove(); }, 4200);
+  }
+
+  // ------------------------------------------------------------------
+  // Modal genérico
+  // ------------------------------------------------------------------
+  function openModal(html, onMount) {
+    document.getElementById("modal-content").innerHTML = html;
+    document.getElementById("modal-overlay").classList.remove("hidden");
+    if (onMount) onMount(document.getElementById("modal-content"));
+  }
+  function closeModal() {
+    document.getElementById("modal-overlay").classList.add("hidden");
+    document.getElementById("modal-content").innerHTML = "";
+  }
+
+  // ------------------------------------------------------------------
+  // Tabs
+  // ------------------------------------------------------------------
+  function initTabs() {
+    document.querySelectorAll(".tab-btn").forEach((btn) => {
+      btn.addEventListener("click", () => switchTab(btn.dataset.tab));
+    });
+  }
+  function switchTab(tabId) {
+    document.querySelectorAll(".tab-btn").forEach((b) => b.classList.toggle("active", b.dataset.tab === tabId));
+    document.querySelectorAll(".tab-panel").forEach((p) => p.classList.toggle("active", p.id === "tab-" + tabId));
+    // Al salir de la pestaña "zona" desactivamos el control de dibujo si estaba activo
+    if (tabId !== "zona") {
+      CW.map.enableDrawControl(false);
+    } else {
+      syncSelectionModeUI();
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // TAB 1 — Geodatos
+  // ------------------------------------------------------------------
+  function initGeodatos() {
+    document.getElementById("file-provincia").addEventListener("change", onProvinciaFile);
+    document.getElementById("btn-clear-provincia").addEventListener("click", clearProvincia);
+    document.getElementById("file-municipios").addEventListener("change", onMunicipiosFile);
+    document.getElementById("btn-clear-municipios").addEventListener("click", clearMunicipios);
+    document.getElementById("chk-mostrar-labels").addEventListener("change", (e) => {
+      CW.map.setLabelsEnabled(e.target.checked);
+    });
+    document.getElementById("btn-cambiar-campo-nombre").addEventListener("click", () => {
+      if (!S.municipios.raw) return;
+      promptNameFieldChoice(S.municipios.raw, (field) => {
+        rebuildMunicipiosIndex(field, S.municipios.idField);
+      });
+    });
+
+    const buscador = document.getElementById("input-buscar");
+    buscador.addEventListener("input", onBuscarInput);
+  }
+
+  function readFileAsJSON(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        try { resolve(JSON.parse(reader.result)); }
+        catch (e) { reject(new Error("El archivo no es un JSON/GeoJSON válido.")); }
+      };
+      reader.onerror = () => reject(new Error("No se pudo leer el archivo."));
+      reader.readAsText(file);
+    });
+  }
+
+  function onProvinciaFile(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    readFileAsJSON(file).then((json) => {
+      const fc = G.normalizeToFeatureCollection(json);
+      if (!fc) throw new Error("Formato GeoJSON no reconocido.");
+      S.provincia.raw = fc;
+      CW.map.setProvinciaLayer(fc);
+      const statusEl = document.getElementById("status-provincia");
+      statusEl.textContent = `Cargado: ${fc.features.length} feature(s) — ${file.name}`;
+      statusEl.className = "status-line ok";
+      const b = CW.map.getProvinciaBounds();
+      if (b && b.isValid()) CW.map.fitToBounds(b);
+      toast("Límite de provincia cargado correctamente.", "ok");
+    }).catch((err) => {
+      const statusEl = document.getElementById("status-provincia");
+      statusEl.textContent = "Error: " + err.message;
+      statusEl.className = "status-line err";
+      toast(err.message, "err");
+    });
+  }
+
+  function clearProvincia() {
+    S.provincia.raw = null;
+    CW.map.clearProvinciaLayer();
+    const statusEl = document.getElementById("status-provincia");
+    statusEl.textContent = "Sin cargar";
+    statusEl.className = "status-line";
+    document.getElementById("file-provincia").value = "";
+  }
+
+  function onMunicipiosFile(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    readFileAsJSON(file).then((json) => {
+      const fc = G.normalizeToFeatureCollection(json);
+      if (!fc || !fc.features.length) throw new Error("Formato GeoJSON no reconocido o vacío.");
+      S.municipios.raw = fc;
+      const detected = G.detectNameField(fc);
+      const idField = G.detectIdField(fc);
+      S.municipios.idField = idField;
+
+      const statusEl = document.getElementById("status-municipios");
+      if (detected) {
+        rebuildMunicipiosIndex(detected, idField);
+        statusEl.textContent = `Cargado: ${fc.features.length} feature(s) — ${file.name}`;
+        statusEl.className = "status-line ok";
+        toast(`Municipios cargados (${fc.features.length}). Campo de nombre detectado: "${detected}".`, "ok");
+      } else {
+        statusEl.textContent = `Cargado ${fc.features.length} feature(s), pero no se detectó el campo de nombre automáticamente.`;
+        statusEl.className = "status-line err";
+        promptNameFieldChoice(fc, (field) => rebuildMunicipiosIndex(field, idField));
+      }
+    }).catch((err) => {
+      const statusEl = document.getElementById("status-municipios");
+      statusEl.textContent = "Error: " + err.message;
+      statusEl.className = "status-line err";
+      toast(err.message, "err");
+    });
+  }
+
+  function promptNameFieldChoice(fc, cb) {
+    const keys = G.getAllPropertyKeys(fc);
+    const options = keys.map((k) => `<option value="${CW.map.escapeHtml(k)}">${CW.map.escapeHtml(k)}</option>`).join("");
+    openModal(`
+      <h3>Elegí el campo de nombre</h3>
+      <p class="hint">No pudimos detectar automáticamente qué propiedad del GeoJSON contiene el nombre de cada municipio/departamento. Elegilo de la lista de propiedades disponibles.</p>
+      <div class="field-group">
+        <label>Propiedad</label>
+        <select id="modal-name-field">${options}</select>
+      </div>
+      <button class="btn btn-primary btn-block" id="modal-confirm-name-field">Confirmar</button>
+    `, () => {
+      document.getElementById("modal-confirm-name-field").addEventListener("click", () => {
+        const field = document.getElementById("modal-name-field").value;
+        closeModal();
+        cb(field);
+      });
+    });
+  }
+
+  function rebuildMunicipiosIndex(nombreField, idField) {
+    S.municipios.nombreField = nombreField;
+    S.municipios.idField = idField;
+    S.municipios.features = G.buildMunicipiosIndex(S.municipios.raw, nombreField, idField);
+
+    CW.map.setMunicipiosLayer(S.municipios.features);
+
+    document.getElementById("grupo-buscador").hidden = false;
+    document.getElementById("grupo-stats").hidden = false;
+    document.getElementById("grupo-labels").hidden = false;
+    document.getElementById("grupo-campo-nombre").hidden = false;
+    document.getElementById("status-campo-nombre").textContent = `nombre = "${nombreField}"` + (idField ? ` · id = "${idField}"` : " · id = (autogenerado)");
+
+    document.getElementById("stats-municipios").innerHTML =
+      `Total de unidades: <b>${S.municipios.features.length}</b><br>` +
+      `Campo de nombre: <code>${CW.map.escapeHtml(nombreField)}</code><br>` +
+      `Campo de id: <code>${idField ? CW.map.escapeHtml(idField) : "(autogenerado)"}</code>`;
+
+    renderMuniList();
+    populateFenomenoSelect(); // no-op safeguard if not yet called
+  }
+
+  function clearMunicipios() {
+    S.municipios.raw = null;
+    S.municipios.nombreField = null;
+    S.municipios.idField = null;
+    S.municipios.features = [];
+    CW.map.clearMunicipiosLayer();
+    document.getElementById("file-municipios").value = "";
+    document.getElementById("status-municipios").textContent = "Sin cargar";
+    document.getElementById("status-municipios").className = "status-line";
+    document.getElementById("grupo-buscador").hidden = true;
+    document.getElementById("grupo-stats").hidden = true;
+    document.getElementById("grupo-labels").hidden = true;
+    document.getElementById("grupo-campo-nombre").hidden = true;
+    document.getElementById("search-results").innerHTML = "";
+    renderMuniList();
+  }
+
+  function onBuscarInput(e) {
+    const q = e.target.value.trim().toLowerCase();
+    const box = document.getElementById("search-results");
+    box.innerHTML = "";
+    if (!q) return;
+    const matches = S.municipios.features.filter((m) => m.nombre.toLowerCase().includes(q)).slice(0, 30);
+    matches.forEach((m) => {
+      const div = document.createElement("div");
+      div.className = "search-result-item";
+      div.textContent = m.nombre;
+      div.addEventListener("click", () => {
+        const bounds = G.computeBBox(m.feature);
+        if (bounds) CW.map.fitToBounds(bounds);
+      });
+      box.appendChild(div);
+    });
+    if (!matches.length) box.innerHTML = '<div class="search-result-item">Sin resultados</div>';
+  }
+
+  // ------------------------------------------------------------------
+  // TAB 2 — Nueva zona
+  // ------------------------------------------------------------------
+  function initZonaTab() {
+    document.getElementById("select-tipo-producto").addEventListener("change", (e) => {
+      S.editor.tipoProducto = e.target.value;
+      S.editor.nivelId = (e.target.value === "probabilidad" ? C.NIVELES_PROB : C.NIVELES_AVISO)[1].id;
+      renderNivelSwatches();
+      updatePreviewZone();
+    });
+
+    populateFenomenoSelect();
+    document.getElementById("select-fenomeno").addEventListener("change", (e) => {
+      S.editor.fenomeno = e.target.value;
+      document.getElementById("input-fenomeno-otro").hidden = e.target.value !== "Otro (especificar)";
+    });
+    document.getElementById("input-fenomeno-otro").addEventListener("input", (e) => {
+      S.editor.fenomenoOtro = e.target.value;
+    });
+    document.getElementById("input-detalle-zona").addEventListener("input", (e) => {
+      S.editor.detalle = e.target.value;
+    });
+
+    document.querySelectorAll(".mode-btn").forEach((btn) => {
+      btn.addEventListener("click", () => setSelectionMode(btn.dataset.mode));
+    });
+
+    document.getElementById("filtro-lista-municipios").addEventListener("input", renderMuniList);
+    document.getElementById("btn-select-view").addEventListener("click", () => {
+      const ids = CW.map.getVisibleMunicipioIds();
+      ids.forEach((id) => S.editor.municipioIdsSel.add(id));
+      syncMunicipioSelectionVisual();
+      renderMuniList();
+    });
+    document.getElementById("btn-clear-sel-municipios").addEventListener("click", () => {
+      S.editor.municipioIdsSel.clear();
+      syncMunicipioSelectionVisual();
+      renderMuniList();
+    });
+
+    document.getElementById("btn-clear-draw").addEventListener("click", () => {
+      CW.map.clearDrawnItems();
+      onDrawChanged();
+    });
+
+    const radio = document.getElementById("input-radio-km");
+    radio.addEventListener("input", (e) => {
+      S.editor.circuloRadioKm = Number(e.target.value);
+      document.getElementById("label-radio-km").textContent = e.target.value;
+      if (S.editor.circuloPendiente) {
+        CW.map.previewCirculo(S.editor.circuloPendiente, S.editor.circuloRadioKm, currentColorHex());
+      }
+    });
+    document.getElementById("btn-add-circulo").addEventListener("click", () => {
+      if (!S.editor.circuloPendiente) { toast("Primero hacé clic en el mapa para ubicar el centro.", "err"); return; }
+      S.editor.circulosAgregados.push({ lat: S.editor.circuloPendiente.lat, lng: S.editor.circuloPendiente.lng, radioKm: S.editor.circuloRadioKm });
+      S.editor.circuloPendiente = null;
+      CW.map.setCirculoPendingMarker(null);
+      renderCirculosState();
+      updatePreviewZone();
+    });
+    document.getElementById("btn-clear-circulos").addEventListener("click", () => {
+      S.editor.circulosAgregados = [];
+      S.editor.circuloPendiente = null;
+      CW.map.clearCirculoPreview();
+      renderCirculosState();
+      updatePreviewZone();
+    });
+
+    document.getElementById("btn-agregar-zona").addEventListener("click", onAgregarZona);
+    document.getElementById("btn-cancelar-edicion-zona").addEventListener("click", cancelZonaEdit);
+
+    renderNivelSwatches();
+    syncSelectionModeUI();
+  }
+
+  function populateFenomenoSelect() {
+    const sel = document.getElementById("select-fenomeno");
+    if (!sel || sel.options.length) return;
+    C.FENOMENOS.forEach((f) => {
+      const opt = document.createElement("option");
+      opt.value = f; opt.textContent = f;
+      sel.appendChild(opt);
+    });
+    S.editor.fenomeno = C.FENOMENOS[0];
+  }
+
+  function renderNivelSwatches() {
+    const box = document.getElementById("nivel-swatches");
+    box.innerHTML = "";
+    const list = S.editor.tipoProducto === "probabilidad" ? C.NIVELES_PROB : C.NIVELES_AVISO;
+    if (!list.find((n) => n.id === S.editor.nivelId)) S.editor.nivelId = list[0].id;
+    list.forEach((n) => {
+      const div = document.createElement("div");
+      div.className = "swatch" + (n.id === S.editor.nivelId ? " selected" : "");
+      div.style.background = n.color;
+      div.style.color = n.ink;
+      div.innerHTML = `${n.label}<small>${n.short}</small>`;
+      div.addEventListener("click", () => {
+        S.editor.nivelId = n.id;
+        renderNivelSwatches();
+        syncMunicipioSelectionVisual();
+        updatePreviewZone();
+      });
+      box.appendChild(div);
+    });
+  }
+
+  function currentColorHex() {
+    return U.getNivelDef(S.editor.tipoProducto, S.editor.nivelId).color;
+  }
+
+  function setSelectionMode(mode) {
+    S.editor.modoSeleccion = mode;
+    syncSelectionModeUI();
+  }
+
+  function syncSelectionModeUI() {
+    document.querySelectorAll(".mode-btn").forEach((b) => b.classList.toggle("active", b.dataset.mode === S.editor.modoSeleccion));
+    document.getElementById("panel-mode-municipios").hidden = S.editor.modoSeleccion !== "municipios";
+    document.getElementById("panel-mode-draw").hidden = S.editor.modoSeleccion !== "draw";
+    document.getElementById("panel-mode-circulo").hidden = S.editor.modoSeleccion !== "circulo";
+    CW.map.enableDrawControl(S.editor.modoSeleccion === "draw");
+    updatePreviewZone();
+  }
+
+  function renderMuniList() {
+    const box = document.getElementById("muni-list");
+    if (!box) return;
+    box.innerHTML = "";
+    const filter = (document.getElementById("filtro-lista-municipios").value || "").trim().toLowerCase();
+    const items = S.municipios.features.filter((m) => !filter || m.nombre.toLowerCase().includes(filter));
+    document.getElementById("count-municipios-sel").textContent = S.editor.municipioIdsSel.size;
+
+    if (!items.length) {
+      box.innerHTML = '<div class="muni-item">Sin municipios cargados o sin coincidencias.</div>';
+      return;
+    }
+    const frag = document.createDocumentFragment();
+    items.slice(0, 400).forEach((m) => {
+      const checked = S.editor.municipioIdsSel.has(m.id);
+      const div = document.createElement("div");
+      div.className = "muni-item" + (checked ? " checked" : "");
+      div.innerHTML = `<input type="checkbox" ${checked ? "checked" : ""}> <span>${CW.map.escapeHtml(m.nombre)}</span>`;
+      div.addEventListener("click", () => toggleMunicipio(m.id));
+      frag.appendChild(div);
+    });
+    box.appendChild(frag);
+  }
+
+  function toggleMunicipio(id) {
+    if (S.editor.municipioIdsSel.has(id)) S.editor.municipioIdsSel.delete(id);
+    else S.editor.municipioIdsSel.add(id);
+    renderMuniList();
+    syncMunicipioSelectionVisual();
+    updatePreviewZone();
+  }
+
+  function onMunicipioClicked(id) {
+    if (S.editor.modoSeleccion !== "municipios") return;
+    toggleMunicipio(id);
+  }
+
+  function syncMunicipioSelectionVisual() {
+    CW.map.setSelectedMunicipios(S.editor.municipioIdsSel, currentColorHex());
+  }
+
+  function onDrawChanged() {
+    document.getElementById("status-draw").textContent = `Polígonos dibujados: ${CW.map.getDrawnCount()}`;
+    updatePreviewZone();
+  }
+
+  function onMapClick(latlng) {
+    if (S.editor.modoSeleccion !== "circulo") return;
+    S.editor.circuloPendiente = latlng;
+    document.getElementById("status-circulo").textContent = `Centro: ${latlng.lat.toFixed(4)}, ${latlng.lng.toFixed(4)}`;
+    CW.map.previewCirculo(latlng, S.editor.circuloRadioKm, currentColorHex());
+  }
+
+  function renderCirculosState() {
+    document.getElementById("status-circulo").textContent = S.editor.circuloPendiente
+      ? `Centro: ${S.editor.circuloPendiente.lat.toFixed(4)}, ${S.editor.circuloPendiente.lng.toFixed(4)}`
+      : `Centro: sin definir (círculos agregados: ${S.editor.circulosAgregados.length})`;
+    CW.map.clearCirculoPreview();
+    CW.map.renderAddedCirculos(S.editor.circulosAgregados, currentColorHex());
+  }
+
+  function collectCurrentZoneGeometries() {
+    const geoms = [];
+    if (S.editor.modoSeleccion === "municipios") {
+      S.municipios.features.forEach((m) => {
+        if (S.editor.municipioIdsSel.has(m.id) && m.feature.geometry) geoms.push(m.feature.geometry);
+      });
+    } else if (S.editor.modoSeleccion === "draw") {
+      geoms.push(...CW.map.getDrawnGeometries());
+    } else if (S.editor.modoSeleccion === "circulo") {
+      S.editor.circulosAgregados.forEach((c) => geoms.push(G.circleToPolygon(c.lat, c.lng, c.radioKm)));
+    }
+    return geoms;
+  }
+
+  function updatePreviewZone() {
+    const geoms = collectCurrentZoneGeometries();
+    CW.map.renderPreviewZone(geoms, currentColorHex());
+  }
+
+  function onAgregarZona() {
+    const geoms = collectCurrentZoneGeometries();
+    if (!geoms.length) {
+      toast("Definí al menos un área (municipios, polígono o círculo) antes de agregar la zona.", "err");
+      return;
+    }
+    const nivelDef = U.getNivelDef(S.editor.tipoProducto, S.editor.nivelId);
+    const fenomenoFinal = S.editor.fenomeno === "Otro (especificar)" ? (S.editor.fenomenoOtro || "Fenómeno sin especificar") : S.editor.fenomeno;
+
+    const municipiosSeleccionados = S.editor.modoSeleccion === "municipios"
+      ? S.municipios.features.filter((m) => S.editor.municipioIdsSel.has(m.id)).map((m) => ({ id: m.id, nombre: m.nombre }))
+      : [];
+
+    const zona = {
+      id: S.editor.editingZonaId || U.uid("zona"),
+      tipoProducto: S.editor.tipoProducto,
+      nivelId: S.editor.nivelId,
+      nivelLabel: nivelDef.label,
+      colorHex: nivelDef.color,
+      fenomeno: fenomenoFinal,
+      detalle: S.editor.detalle,
+      modoSeleccion: S.editor.modoSeleccion,
+      municipios: municipiosSeleccionados,
+      municipiosNombres: municipiosSeleccionados.map((m) => m.nombre),
+      geometries: geoms,
+    };
+
+    if (S.editor.editingZonaId) {
+      const idx = S.borrador.zonas.findIndex((z) => z.id === S.editor.editingZonaId);
+      if (idx !== -1) S.borrador.zonas[idx] = zona;
+      toast("Zona actualizada en el borrador.", "ok");
+    } else {
+      S.borrador.zonas.push(zona);
+      toast("Zona agregada al boletín en borrador.", "ok");
+    }
+
+    resetZonaEditorUI();
+    renderZoneList();
+    renderBadges();
+    renderBulletinPreview();
+    switchTab("borrador");
+  }
+
+  function resetZonaEditorUI() {
+    U.resetEditorSelection();
+    CW.map.clearDrawnItems();
+    CW.map.clearCirculoPreview();
+    CW.map.clearPreviewZone();
+    CW.map.clearSelectionHighlight();
+    document.getElementById("input-detalle-zona").value = "";
+    S.editor.detalle = "";
+    document.getElementById("btn-agregar-zona").textContent = "➕ Agregar zona al boletín en borrador";
+    document.getElementById("btn-cancelar-edicion-zona").hidden = true;
+    document.getElementById("zona-form-title").textContent = "Definir zona de aviso";
+    renderMuniList();
+    onDrawChanged();
+    renderCirculosState();
+  }
+
+  function editZona(zonaId) {
+    const zona = S.borrador.zonas.find((z) => z.id === zonaId);
+    if (!zona) return;
+    resetZonaEditorUI();
+    S.editor.editingZonaId = zonaId;
+    S.editor.tipoProducto = zona.tipoProducto;
+    document.getElementById("select-tipo-producto").value = zona.tipoProducto;
+    S.editor.nivelId = zona.nivelId;
+    S.editor.fenomeno = C.FENOMENOS.includes(zona.fenomeno) ? zona.fenomeno : "Otro (especificar)";
+    document.getElementById("select-fenomeno").value = S.editor.fenomeno;
+    document.getElementById("input-fenomeno-otro").hidden = S.editor.fenomeno !== "Otro (especificar)";
+    if (S.editor.fenomeno === "Otro (especificar)") {
+      S.editor.fenomenoOtro = zona.fenomeno;
+      document.getElementById("input-fenomeno-otro").value = zona.fenomeno;
+    }
+    S.editor.detalle = zona.detalle || "";
+    document.getElementById("input-detalle-zona").value = S.editor.detalle;
+    S.editor.modoSeleccion = zona.modoSeleccion;
+    (zona.municipios || []).forEach((m) => S.editor.municipioIdsSel.add(m.id));
+
+    renderNivelSwatches();
+    syncSelectionModeUI();
+    syncMunicipioSelectionVisual();
+    renderMuniList();
+    updatePreviewZone();
+
+    document.getElementById("btn-agregar-zona").textContent = "💾 Guardar cambios de la zona";
+    document.getElementById("btn-cancelar-edicion-zona").hidden = false;
+    document.getElementById("zona-form-title").textContent = "Editando zona existente";
+    switchTab("zona");
+  }
+
+  function cancelZonaEdit() {
+    resetZonaEditorUI();
+    switchTab("borrador");
+  }
+
+  function deleteZona(zonaId) {
+    S.borrador.zonas = S.borrador.zonas.filter((z) => z.id !== zonaId);
+    renderZoneList();
+    renderBadges();
+    renderBulletinPreview();
+  }
+
+  // ------------------------------------------------------------------
+  // TAB 3 — Borrador
+  // ------------------------------------------------------------------
+  function initBorradorTab() {
+    document.getElementById("input-bol-titulo").addEventListener("input", (e) => { S.borrador.titulo = e.target.value; });
+    document.getElementById("input-bol-desde").addEventListener("input", (e) => { S.borrador.desde = e.target.value; });
+    document.getElementById("input-bol-hasta").addEventListener("input", (e) => { S.borrador.hasta = e.target.value; });
+    document.getElementById("input-bol-emisor").addEventListener("input", (e) => { S.borrador.emisor = e.target.value; });
+    document.getElementById("input-bol-resumen").addEventListener("input", (e) => { S.borrador.resumen = e.target.value; });
+    document.getElementById("btn-publicar-boletin").addEventListener("click", onPublicarBoletin);
+    document.getElementById("btn-vaciar-borrador").addEventListener("click", onVaciarBorrador);
+  }
+
+  function renderZoneList() {
+    const box = document.getElementById("zone-list");
+    box.innerHTML = "";
+    document.getElementById("count-zonas-borrador").textContent = S.borrador.zonas.length;
+    if (!S.borrador.zonas.length) {
+      box.innerHTML = '<p class="hint">Todavía no agregaste ninguna zona. Ir a la pestaña "2. Nueva zona".</p>';
+      return;
+    }
+    S.borrador.zonas.forEach((z) => {
+      const card = document.createElement("div");
+      card.className = "zone-card";
+      card.innerHTML = `
+        <div class="zone-card-head">
+          <span class="zone-color-dot" style="background:${z.colorHex}"></span>
+          <span class="zone-card-title">${CW.map.escapeHtml(z.nivelLabel)} — ${CW.map.escapeHtml(z.fenomeno)}</span>
+        </div>
+        <div class="zone-card-sub">${z.municipiosNombres.length ? CW.map.escapeHtml(z.municipiosNombres.slice(0,6).join(", ")) + (z.municipiosNombres.length>6?"…":"") : (z.modoSeleccion === "draw" ? "Área dibujada manualmente" : "Área circular")}</div>
+        <div class="zone-card-actions">
+          <button class="btn btn-sm btn-outline" data-act="edit">✏️ Editar</button>
+          <button class="btn btn-sm btn-outline" data-act="del">🗑 Quitar</button>
+        </div>
+      `;
+      card.querySelector('[data-act="edit"]').addEventListener("click", () => editZona(z.id));
+      card.querySelector('[data-act="del"]').addEventListener("click", () => deleteZona(z.id));
+      box.appendChild(card);
+    });
+  }
+
+  function onPublicarBoletin() {
+    if (!S.borrador.zonas.length) { toast("Agregá al menos una zona antes de publicar.", "err"); return; }
+    if (!S.borrador.titulo.trim()) { toast("Ingresá un título para el boletín.", "err"); return; }
+
+    const bulletin = {
+      id: U.uid("bol"),
+      titulo: S.borrador.titulo,
+      desde: S.borrador.desde,
+      hasta: S.borrador.hasta,
+      emisor: S.borrador.emisor,
+      resumen: S.borrador.resumen,
+      zonas: S.borrador.zonas,
+      publicadoEn: new Date().toISOString(),
+    };
+    S.bulletins.unshift(bulletin);
+    S.featuredBulletinId = bulletin.id;
+
+    // Reset borrador
+    S.borrador = { titulo: "", desde: "", hasta: "", emisor: S.borrador.emisor, resumen: "", zonas: [] };
+    document.getElementById("input-bol-titulo").value = "";
+    document.getElementById("input-bol-desde").value = "";
+    document.getElementById("input-bol-hasta").value = "";
+    document.getElementById("input-bol-resumen").value = "";
+
+    renderZoneList();
+    renderBadges();
+    renderBulletinList();
+    renderExportSelect();
+    renderFeaturedSelect();
+    renderBulletinPreview();
+    toast("Boletín publicado correctamente.", "ok");
+    switchTab("emitidos");
+  }
+
+  function onVaciarBorrador() {
+    if (!S.borrador.zonas.length && !S.borrador.titulo) return;
+    if (!confirm("¿Vaciar todo el boletín en borrador? Esta acción no se puede deshacer.")) return;
+    S.borrador.zonas = [];
+    S.borrador.titulo = ""; S.borrador.desde = ""; S.borrador.hasta = ""; S.borrador.resumen = "";
+    document.getElementById("input-bol-titulo").value = "";
+    document.getElementById("input-bol-desde").value = "";
+    document.getElementById("input-bol-hasta").value = "";
+    document.getElementById("input-bol-resumen").value = "";
+    renderZoneList();
+    renderBadges();
+    renderBulletinPreview();
+  }
+
+  // ------------------------------------------------------------------
+  // TAB 4 — Emitidos
+  // ------------------------------------------------------------------
+  function initEmitidosTab() {
+    document.getElementById("select-bol-destacado").addEventListener("change", (e) => {
+      S.featuredBulletinId = e.target.value || null;
+      renderBulletinPreview();
+    });
+  }
+
+  function renderFeaturedSelect() {
+    const sel = document.getElementById("select-bol-destacado");
+    sel.innerHTML = '<option value="">— Ninguno —</option>';
+    S.bulletins.forEach((b) => {
+      const opt = document.createElement("option");
+      opt.value = b.id; opt.textContent = b.titulo;
+      if (b.id === S.featuredBulletinId) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  }
+
+  function renderBulletinList() {
+    const box = document.getElementById("bulletin-list");
+    box.innerHTML = "";
+    if (!S.bulletins.length) {
+      box.innerHTML = '<p class="hint">Todavía no publicaste ningún boletín.</p>';
+      return;
+    }
+    S.bulletins.forEach((b) => {
+      const status = U.isBulletinActive(b);
+      const statusLabel = status === "active" ? '<span class="status-active">● VIGENTE</span>' : status === "expired" ? '<span class="status-expired">● VENCIDO</span>' : '<span class="status-scheduled">● PROGRAMADO</span>';
+      const chips = b.zonas.map((z) => `<span class="chip" style="background:${z.colorHex}">${CW.map.escapeHtml(z.nivelLabel)}</span>`).join("");
+      const card = document.createElement("div");
+      card.className = "bulletin-card-item";
+      card.innerHTML = `
+        <h3>${CW.map.escapeHtml(b.titulo)}</h3>
+        <div class="meta">${statusLabel} · Emisor: ${CW.map.escapeHtml(b.emisor || "—")}<br>
+        Vigencia: ${fmtDate(b.desde)} → ${fmtDate(b.hasta)}<br>
+        Publicado: ${fmtDate(b.publicadoEn)} · ${b.zonas.length} zona(s)</div>
+        <div class="zones-inline">${chips}</div>
+        <div class="row-actions">
+          <button class="btn btn-sm btn-outline" data-act="feature">📌 Destacar</button>
+          <button class="btn btn-sm btn-outline" data-act="del">🗑 Eliminar</button>
+        </div>
+      `;
+      card.querySelector('[data-act="feature"]').addEventListener("click", () => {
+        S.featuredBulletinId = b.id;
+        renderFeaturedSelect();
+        renderBulletinPreview();
+        toast("Boletín destacado en el mapa.", "ok");
+      });
+      card.querySelector('[data-act="del"]').addEventListener("click", () => {
+        if (!confirm(`¿Eliminar el boletín "${b.titulo}"?`)) return;
+        S.bulletins = S.bulletins.filter((x) => x.id !== b.id);
+        if (S.featuredBulletinId === b.id) S.featuredBulletinId = S.bulletins.length ? S.bulletins[0].id : null;
+        renderBulletinList();
+        renderFeaturedSelect();
+        renderExportSelect();
+        renderBulletinPreview();
+      });
+      box.appendChild(card);
+    });
+  }
+
+  function fmtDate(iso) {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "—";
+    return d.toLocaleString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  }
+
+  // ------------------------------------------------------------------
+  // Render principal del boletín destacado (banner + mapa + leyenda)
+  // ------------------------------------------------------------------
+  function renderBulletinPreview() {
+    const featured = S.bulletins.find((b) => b.id === S.featuredBulletinId);
+    const zonasToRender = featured ? featured.zonas : S.borrador.zonas;
+
+    CW.map.renderZonesOnMap(zonasToRender);
+
+    const titleEl = document.getElementById("banner-title");
+    const subEl = document.getElementById("banner-subtitle");
+    const issuedEl = document.getElementById("footer-issued");
+
+    if (featured) {
+      titleEl.textContent = featured.titulo;
+      subEl.textContent = `Válido: ${fmtDate(featured.desde)} → ${fmtDate(featured.hasta)} · Emisor: ${featured.emisor || "—"}`;
+      issuedEl.textContent = `Emitido: ${fmtDate(featured.publicadoEn)}`;
+    } else if (S.borrador.zonas.length) {
+      titleEl.textContent = (S.borrador.titulo || "Boletín sin título") + " (BORRADOR — no publicado)";
+      subEl.textContent = `${S.borrador.zonas.length} zona(s) en preparación`;
+      issuedEl.textContent = "Sin publicar";
+    } else {
+      titleEl.textContent = "Sin boletín destacado — cargá geodatos y creá una zona para comenzar";
+      subEl.textContent = "";
+      issuedEl.textContent = "—";
+    }
+
+    // Leyenda: niveles usados en las zonas mostradas
+    const legend = document.getElementById("footer-legend");
+    legend.innerHTML = "";
+    const seen = new Set();
+    zonasToRender.forEach((z) => {
+      if (seen.has(z.nivelId)) return;
+      seen.add(z.nivelId);
+      const chip = document.createElement("span");
+      chip.className = "legend-chip";
+      chip.innerHTML = `<span class="sw" style="background:${z.colorHex}"></span>${CW.map.escapeHtml(z.nivelLabel)}`;
+      legend.appendChild(chip);
+    });
+    if (!seen.size) legend.textContent = "Sin niveles activos";
+  }
+
+  function renderBadges() {
+    document.getElementById("badge-borrador").textContent = S.borrador.zonas.length;
+    document.getElementById("badge-emitidos").textContent = S.bulletins.length;
+  }
+
+  // ------------------------------------------------------------------
+  // TAB 5 — Capas extra
+  // ------------------------------------------------------------------
+  function initCapasTab() {
+    document.getElementById("file-extra").addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const color = document.getElementById("color-extra").value;
+      readFileAsJSON(file).then((json) => {
+        const fc = G.normalizeToFeatureCollection(json);
+        if (!fc) throw new Error("Formato GeoJSON no reconocido.");
+        const id = U.uid("extra");
+        CW.map.addExtraLayer(id, fc, color);
+        S.extraLayers.push({ id, name: file.name, color });
+        renderExtraLayerList();
+        toast(`Capa "${file.name}" agregada.`, "ok");
+      }).catch((err) => toast(err.message, "err"));
+      e.target.value = "";
+    });
+  }
+
+  function renderExtraLayerList() {
+    const box = document.getElementById("extra-layer-list");
+    box.innerHTML = "";
+    S.extraLayers.forEach((l) => {
+      const div = document.createElement("div");
+      div.className = "extra-layer-item";
+      div.innerHTML = `<span class="sw" style="background:${l.color}"></span><span>${CW.map.escapeHtml(l.name)}</span><button class="btn btn-xs btn-outline">Quitar</button>`;
+      div.querySelector("button").addEventListener("click", () => {
+        CW.map.removeExtraLayer(l.id);
+        S.extraLayers = S.extraLayers.filter((x) => x.id !== l.id);
+        renderExtraLayerList();
+      });
+      box.appendChild(div);
+    });
+  }
+
+  // ------------------------------------------------------------------
+  // TAB 6 — Exportar / importar (los handlers de exportación viven en export.js)
+  // ------------------------------------------------------------------
+  function renderExportSelect() {
+    const sel = document.getElementById("select-bol-export");
+    sel.innerHTML = '<option value="__borrador__">Boletín en borrador (sin publicar)</option>';
+    S.bulletins.forEach((b) => {
+      const opt = document.createElement("option");
+      opt.value = b.id; opt.textContent = b.titulo;
+      sel.appendChild(opt);
+    });
+  }
+
+  // ------------------------------------------------------------------
+  // Toolbar del mapa (ajustar vista)
+  // ------------------------------------------------------------------
+  function initMapToolbar() {
+    document.getElementById("btn-fit-argentina").addEventListener("click", () => CW.map.fitToArgentina());
+    document.getElementById("btn-fit-provincia").addEventListener("click", () => {
+      const b = CW.map.getProvinciaBounds();
+      if (b && b.isValid()) CW.map.fitToBounds(b); else toast("No hay límite de provincia cargado.", "err");
+    });
+    document.getElementById("btn-fit-municipios").addEventListener("click", () => {
+      const b = CW.map.getMunicipiosBounds();
+      if (b && b.isValid()) CW.map.fitToBounds(b); else toast("No hay municipios cargados.", "err");
+    });
+    document.getElementById("btn-fit-boletin").addEventListener("click", () => {
+      const featured = S.bulletins.find((b) => b.id === S.featuredBulletinId);
+      const zonas = featured ? featured.zonas : S.borrador.zonas;
+      if (!zonas.length) { toast("No hay un boletín destacado con zonas.", "err"); return; }
+      CW.map.fitToZonesBounds(zonas);
+    });
+  }
+
+  // ------------------------------------------------------------------
+  // Reloj de la topbar
+  // ------------------------------------------------------------------
+  function startClock() {
+    function tick() {
+      const now = new Date();
+      const txt = now.toLocaleString("es-AR", { hour12: false }) + " (ART)";
+      document.getElementById("topbar-clock").textContent = txt;
+    }
+    tick();
+    setInterval(tick, 1000);
+  }
+
+  CW.ui = {
+    toast, openModal, closeModal,
+    initTabs, switchTab,
+    initGeodatos,
+    initZonaTab,
+    initBorradorTab,
+    initEmitidosTab,
+    initCapasTab,
+    initMapToolbar,
+    startClock,
+
+    onDrawChanged,
+    onMapClick,
+    onMunicipioClicked,
+
+    renderMuniList,
+    renderZoneList,
+    renderBadges,
+    renderBulletinList,
+    renderFeaturedSelect,
+    renderExportSelect,
+    renderExtraLayerList,
+    renderBulletinPreview,
+
+    fmtDate,
+    readFileAsJSON,
+    rebuildMunicipiosIndex,
+  };
+
+  document.getElementById && document.addEventListener("DOMContentLoaded", () => {
+    document.getElementById("modal-close").addEventListener("click", closeModal);
+    document.getElementById("modal-overlay").addEventListener("click", (e) => {
+      if (e.target.id === "modal-overlay") closeModal();
+    });
+  });
+})(window);
+
+
+/* ===== js/export.js ===== */
+/* =========================================================
+   ColdWarnings — export.js
+   Exportación de boletines a .geojson, exportación de imagen
+   del boletín (.png) e importación/exportación del proyecto
+   completo (.json) para guardar y retomar el trabajo.
+   ========================================================= */
+
+(function (global) {
+  "use strict";
+
+  const CW = global.CW;
+  const S = CW.state;
+
+  function downloadBlob(content, filename, mime) {
+    const blob = new Blob([content], { type: mime || "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
+
+  function slugify(str) {
+    return (str || "boletin")
+      .toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 60) || "boletin";
+  }
+
+  // ------------------------------------------------------------------
+  // Boletín -> FeatureCollection GeoJSON
+  //   Cada "feature" corresponde a UNA geometría de UNA zona
+  //   (para zonas por municipios, se exporta un feature por municipio
+  //   para preservar los límites originales).
+  // ------------------------------------------------------------------
+  function bulletinToFeatureCollection(bulletin) {
+    const features = [];
+    (bulletin.zonas || []).forEach((zona) => {
+      if (zona.modoSeleccion === "municipios" && zona.municipios && zona.municipios.length) {
+        zona.geometries.forEach((geom, i) => {
+          const muni = zona.municipios[i];
+          features.push({
+            type: "Feature",
+            properties: {
+              boletin_id: bulletin.id || null,
+              boletin_titulo: bulletin.titulo || null,
+              boletin_emisor: bulletin.emisor || null,
+              boletin_valido_desde: bulletin.desde || null,
+              boletin_valido_hasta: bulletin.hasta || null,
+              boletin_publicado_en: bulletin.publicadoEn || null,
+              zona_id: zona.id,
+              tipo_producto: zona.tipoProducto,
+              nivel_id: zona.nivelId,
+              nivel_label: zona.nivelLabel,
+              color: zona.colorHex,
+              fenomeno: zona.fenomeno,
+              detalle: zona.detalle || null,
+              municipio_id: muni ? muni.id : null,
+              municipio_nombre: muni ? muni.nombre : null,
+            },
+            geometry: geom,
+          });
+        });
+      } else {
+        zona.geometries.forEach((geom) => {
+          features.push({
+            type: "Feature",
+            properties: {
+              boletin_id: bulletin.id || null,
+              boletin_titulo: bulletin.titulo || null,
+              boletin_emisor: bulletin.emisor || null,
+              boletin_valido_desde: bulletin.desde || null,
+              boletin_valido_hasta: bulletin.hasta || null,
+              boletin_publicado_en: bulletin.publicadoEn || null,
+              zona_id: zona.id,
+              tipo_producto: zona.tipoProducto,
+              nivel_id: zona.nivelId,
+              nivel_label: zona.nivelLabel,
+              color: zona.colorHex,
+              fenomeno: zona.fenomeno,
+              detalle: zona.detalle || null,
+              municipio_id: null,
+              municipio_nombre: null,
+            },
+            geometry: geom,
+          });
+        });
+      }
+    });
+    return {
+      type: "FeatureCollection",
+      cw_meta: {
+        generado_por: "ColdWarnings",
+        version: 1,
+        exportado_en: new Date().toISOString(),
+      },
+      features,
+    };
+  }
+
+  function currentBorradorAsBulletin() {
+    return {
+      id: "__borrador__",
+      titulo: S.borrador.titulo || "Boletín sin título (borrador)",
+      desde: S.borrador.desde,
+      hasta: S.borrador.hasta,
+      emisor: S.borrador.emisor,
+      resumen: S.borrador.resumen,
+      zonas: S.borrador.zonas,
+      publicadoEn: null,
+    };
+  }
+
+  function exportSelectedBulletin() {
+    const sel = document.getElementById("select-bol-export").value;
+    let bulletin;
+    if (sel === "__borrador__") {
+      bulletin = currentBorradorAsBulletin();
+      if (!bulletin.zonas.length) { CW.ui.toast("El borrador no tiene zonas para exportar.", "err"); return; }
+    } else {
+      bulletin = S.bulletins.find((b) => b.id === sel);
+      if (!bulletin) { CW.ui.toast("No se encontró el boletín seleccionado.", "err"); return; }
+    }
+    const fc = bulletinToFeatureCollection(bulletin);
+    downloadBlob(JSON.stringify(fc, null, 2), `coldwarnings-${slugify(bulletin.titulo)}.geojson`, "application/geo+json");
+    CW.ui.toast("Boletín exportado como .geojson.", "ok");
+  }
+
+  function exportAllBulletins() {
+    if (!S.bulletins.length) { CW.ui.toast("No hay boletines emitidos para exportar.", "err"); return; }
+    const allFeatures = [];
+    S.bulletins.forEach((b) => {
+      const fc = bulletinToFeatureCollection(b);
+      allFeatures.push(...fc.features);
+    });
+    const out = {
+      type: "FeatureCollection",
+      cw_meta: { generado_por: "ColdWarnings", version: 1, exportado_en: new Date().toISOString(), boletines: S.bulletins.length },
+      features: allFeatures,
+    };
+    downloadBlob(JSON.stringify(out, null, 2), "coldwarnings-todos-los-boletines.geojson", "application/geo+json");
+    CW.ui.toast(`Exportados ${S.bulletins.length} boletín(es) en un solo .geojson.`, "ok");
+  }
+
+  // ------------------------------------------------------------------
+  // Importar boletines desde un .geojson exportado por ColdWarnings
+  // ------------------------------------------------------------------
+  function importBulletinsFromGeoJSON(file) {
+    CW.ui.readFileAsJSON(file).then((json) => {
+      if (!json || !Array.isArray(json.features)) throw new Error("El archivo no tiene el formato esperado (FeatureCollection).");
+      const byBoletin = {};
+      json.features.forEach((f) => {
+        const p = f.properties || {};
+        const bid = p.boletin_id || "importado_" + slugify(p.boletin_titulo || "sin-titulo");
+        if (!byBoletin[bid]) {
+          byBoletin[bid] = {
+            id: CW.util.uid("bol"),
+            titulo: (p.boletin_titulo || "Boletín importado") + " (importado)",
+            desde: p.boletin_valido_desde || "",
+            hasta: p.boletin_valido_hasta || "",
+            emisor: p.boletin_emisor || "",
+            resumen: "",
+            zonas: {},
+            publicadoEn: p.boletin_publicado_en || new Date().toISOString(),
+          };
+        }
+        const zid = p.zona_id || CW.util.uid("zona");
+        if (!byBoletin[bid].zonas[zid]) {
+          byBoletin[bid].zonas[zid] = {
+            id: zid,
+            tipoProducto: p.tipo_producto || "nivel",
+            nivelId: p.nivel_id || "amarillo",
+            nivelLabel: p.nivel_label || "Alerta",
+            colorHex: p.color || "#ffd966",
+            fenomeno: p.fenomeno || "Fenómeno sin especificar",
+            detalle: p.detalle || "",
+            modoSeleccion: p.municipio_nombre ? "municipios" : "draw",
+            municipios: [],
+            municipiosNombres: [],
+            geometries: [],
+          };
+        }
+        byBoletin[bid].zonas[zid].geometries.push(f.geometry);
+        if (p.municipio_nombre) {
+          byBoletin[bid].zonas[zid].municipios.push({ id: p.municipio_id, nombre: p.municipio_nombre });
+          byBoletin[bid].zonas[zid].municipiosNombres.push(p.municipio_nombre);
+        }
+      });
+
+      let count = 0;
+      Object.values(byBoletin).forEach((b) => {
+        b.zonas = Object.values(b.zonas);
+        S.bulletins.unshift(b);
+        count++;
+      });
+
+      CW.ui.renderBulletinList();
+      CW.ui.renderFeaturedSelect();
+      CW.ui.renderExportSelect();
+      CW.ui.renderBadges();
+      if (count && !S.featuredBulletinId) {
+        S.featuredBulletinId = S.bulletins[0].id;
+        CW.ui.renderFeaturedSelect();
+      }
+      CW.ui.renderBulletinPreview();
+      CW.ui.toast(`Importado(s) ${count} boletín(es) desde el .geojson.`, "ok");
+    }).catch((err) => CW.ui.toast(err.message, "err"));
+  }
+
+  // ------------------------------------------------------------------
+  // Exportar imagen del boletín (PNG) usando html2canvas
+  // ------------------------------------------------------------------
+  function exportBulletinPNG() {
+    const card = document.getElementById("bulletin-card");
+    CW.ui.toast("Generando imagen, puede tardar unos segundos…", "ok");
+    html2canvas(card, { useCORS: true, allowTaint: false, scale: 2, backgroundColor: "#ffffff" })
+      .then((canvas) => {
+        canvas.toBlob((blob) => {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = "coldwarnings-boletin.png";
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 2000);
+        }, "image/png");
+      })
+      .catch((err) => {
+        console.error(err);
+        CW.ui.toast("No se pudo generar la imagen. Probá cambiando el mapa base a 'Claro (CARTO)'.", "err");
+      });
+  }
+
+  // ------------------------------------------------------------------
+  // Proyecto completo (guardar/abrir todo: geodatos + boletines)
+  // ------------------------------------------------------------------
+  function saveProject() {
+    const payload = {
+      cw_project: true,
+      version: 1,
+      savedAt: new Date().toISOString(),
+      provincia: S.provincia,
+      municipios: {
+        raw: S.municipios.raw,
+        nombreField: S.municipios.nombreField,
+        idField: S.municipios.idField,
+      },
+      extraLayersMeta: S.extraLayers, // sólo metadata visual; los datos de capas extra no se re-serializan por simplicidad
+      borrador: S.borrador,
+      bulletins: S.bulletins,
+      featuredBulletinId: S.featuredBulletinId,
+    };
+    downloadBlob(JSON.stringify(payload), "coldwarnings-proyecto.json", "application/json");
+    CW.ui.toast("Proyecto guardado. Volvé a abrirlo con 'Abrir proyecto'.", "ok");
+  }
+
+  function loadProject(file) {
+    CW.ui.readFileAsJSON(file).then((json) => {
+      if (!json || !json.cw_project) throw new Error("El archivo no es un proyecto válido de ColdWarnings.");
+
+      if (json.provincia && json.provincia.raw) {
+        S.provincia.raw = json.provincia.raw;
+        CW.map.setProvinciaLayer(S.provincia.raw);
+        document.getElementById("status-provincia").textContent = "Cargado desde proyecto guardado";
+        document.getElementById("status-provincia").className = "status-line ok";
+      }
+
+      if (json.municipios && json.municipios.raw) {
+        S.municipios.raw = json.municipios.raw;
+        CW.ui.rebuildMunicipiosIndex(json.municipios.nombreField, json.municipios.idField);
+        document.getElementById("status-municipios").textContent = "Cargado desde proyecto guardado";
+        document.getElementById("status-municipios").className = "status-line ok";
+      }
+
+      S.borrador = json.borrador || S.borrador;
+      document.getElementById("input-bol-titulo").value = S.borrador.titulo || "";
+      document.getElementById("input-bol-desde").value = S.borrador.desde || "";
+      document.getElementById("input-bol-hasta").value = S.borrador.hasta || "";
+      document.getElementById("input-bol-emisor").value = S.borrador.emisor || "";
+      document.getElementById("input-bol-resumen").value = S.borrador.resumen || "";
+
+      S.bulletins = json.bulletins || [];
+      S.featuredBulletinId = json.featuredBulletinId || (S.bulletins[0] && S.bulletins[0].id) || null;
+
+      CW.ui.renderZoneList();
+      CW.ui.renderBadges();
+      CW.ui.renderBulletinList();
+      CW.ui.renderFeaturedSelect();
+      CW.ui.renderExportSelect();
+      CW.ui.renderBulletinPreview();
+      CW.ui.toast("Proyecto cargado correctamente.", "ok");
+    }).catch((err) => CW.ui.toast(err.message, "err"));
+  }
+
+  CW.exportTools = {
+    exportSelectedBulletin,
+    exportAllBulletins,
+    importBulletinsFromGeoJSON,
+    exportBulletinPNG,
+    saveProject,
+    loadProject,
+  };
+})(window);
+
+
+/* ===== js/main.js ===== */
+/* =========================================================
+   ColdWarnings — main.js
+   Punto de entrada: inicializa mapa, UI y conecta los botones
+   de exportación / importación / guardado de proyecto.
+   ========================================================= */
+
+(function () {
+  "use strict";
+
+  document.addEventListener("DOMContentLoaded", () => {
+    const CW = window.CW;
+
+    // 1. Mapa
+    CW.map.initMap();
+
+    // 2. Selector de mapa base
+    const basemapSel = document.getElementById("select-basemap");
+    CW.constants.BASEMAPS.forEach((b) => {
+      const opt = document.createElement("option");
+      opt.value = b.id; opt.textContent = b.label;
+      basemapSel.appendChild(opt);
+    });
+    basemapSel.value = "carto_light";
+    basemapSel.addEventListener("change", (e) => CW.map.setBasemap(e.target.value));
+
+    // 3. UI: tabs y paneles
+    CW.ui.initTabs();
+    CW.ui.initGeodatos();
+    CW.ui.initZonaTab();
+    CW.ui.initBorradorTab();
+    CW.ui.initEmitidosTab();
+    CW.ui.initCapasTab();
+    CW.ui.initMapToolbar();
+    CW.ui.startClock();
+
+    // Estado inicial de listados
+    CW.ui.renderMuniList();
+    CW.ui.renderZoneList();
+    CW.ui.renderBadges();
+    CW.ui.renderBulletinList();
+    CW.ui.renderFeaturedSelect();
+    CW.ui.renderExportSelect();
+    CW.ui.renderBulletinPreview();
+
+    // 4. Exportación
+    document.getElementById("btn-export-geojson").addEventListener("click", CW.exportTools.exportSelectedBulletin);
+    document.getElementById("btn-export-all-geojson").addEventListener("click", CW.exportTools.exportAllBulletins);
+    document.getElementById("btn-export-png").addEventListener("click", CW.exportTools.exportBulletinPNG);
+
+    document.getElementById("file-import-geojson").addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (file) CW.exportTools.importBulletinsFromGeoJSON(file);
+      e.target.value = "";
+    });
+
+    // 5. Proyecto (guardar / abrir todo)
+    document.getElementById("btn-save-project").addEventListener("click", CW.exportTools.saveProject);
+    document.getElementById("btn-load-project").addEventListener("click", () => document.getElementById("file-project").click());
+    document.getElementById("file-project").addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (file) CW.exportTools.loadProject(file);
+      e.target.value = "";
+    });
+
+    // Ajuste responsive: invalidar tamaño del mapa cuando cambia el layout
+    window.addEventListener("resize", () => CW.map.getMap().invalidateSize());
+    setTimeout(() => CW.map.getMap().invalidateSize(), 250);
+
+    CW.ui.toast("Bienvenido a ColdWarnings. Cargá tus geodatos en la pestaña 1 para comenzar.", "ok");
+  });
+})();
+
+</script>
 </body>
 </html>
