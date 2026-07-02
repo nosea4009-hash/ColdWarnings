@@ -63,9 +63,12 @@ matplotlib.use("Agg")  # backend sin ventana, ideal para generar PNG en cualquie
 
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as fm
+import matplotlib.image as mpimg
 from matplotlib.patches import Rectangle
 from matplotlib.lines import Line2D
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 
+import numpy as np
 import geopandas as gpd
 import pandas as pd
 from shapely.geometry import box
@@ -109,6 +112,23 @@ COLOR_TEXTO_OSCURO = "#1a1a1a"
 # --- Colores del banner azul superior (idénticos a la referencia NWS) ------
 COLOR_BANNER_AZUL = "#12225c"       # azul oscuro tipo NOAA/NWS
 COLOR_BANNER_BORDE = "#000000"
+
+# --- Logo del proyecto -------------------------------------------------------
+# Ruta por defecto donde el script busca el logo, si no se indica --logo por
+# línea de comandos. Colocá tu archivo de logo (.png, con fondo transparente
+# idealmente) en la carpeta de esta configuración, o cambiá la ruta acá.
+RUTA_LOGO_DEFAULT = CARPETA_BASE / "logo" / "logo_pampa.png"
+
+# Esquina donde se dibuja el logo sobre la figura completa. Opciones válidas:
+# "superior-izquierda", "superior-derecha", "inferior-izquierda", "inferior-derecha"
+ESQUINA_LOGO_DEFAULT = "inferior-derecha"
+
+# Ancho del logo, como fracción del ancho total de la figura (0 a 1).
+# El alto se ajusta automáticamente para mantener la proporción original del logo.
+ANCHO_LOGO_FRACCION = 0.09
+
+# Margen entre el logo y el borde de la figura, como fracción del ancho total.
+MARGEN_LOGO_FRACCION = 0.012
 
 # --- Niveles de alerta por clima frío / heladas -----------------------------
 # Reemplaza la escala de "probabilidad de nieve" del NWS por una escala de
@@ -406,6 +426,93 @@ def construir_leyenda_pie(ax_leyenda, niveles_usados: list[dict]):
         )
 
 
+def _recortar_bbox_contenido(img):
+    """Recorta los márgenes totalmente transparentes/vacíos alrededor del
+    contenido real de un logo (para que un PNG con mucho espacio en blanco/
+    transparente alrededor del dibujo no se vea "diminuto" o desplazado al
+    insertarlo en un recuadro pequeño). Si la imagen no tiene canal alfa,
+    se devuelve sin cambios."""
+    try:
+        if img.ndim == 3 and img.shape[2] == 4:
+            alfa = img[:, :, 3]
+            filas = np.where(alfa.max(axis=1) > 0.02)[0]
+            columnas = np.where(alfa.max(axis=0) > 0.02)[0]
+            if filas.size and columnas.size:
+                r0, r1 = filas[0], filas[-1] + 1
+                c0, c1 = columnas[0], columnas[-1] + 1
+                return img[r0:r1, c0:c1]
+    except Exception:
+        pass
+    return img
+
+
+def agregar_logo(ax_mapa, ruta_logo: str | Path, esquina: str, ancho_fraccion: float, margen_fraccion: float):
+    """Dibuja el logo del proyecto en una de las cuatro esquinas DEL PANEL
+    DEL MAPA (no de la figura completa), usando OffsetImage/AnnotationBbox.
+
+    Se usa esta técnica (en vez de ejes anidados) porque respeta
+    automáticamente la relación de aspecto real del logo sin necesidad de
+    calcular manualmente anchos/altos en pulgadas, y porque se ancla a
+    coordenadas de "axes fraction" del propio mapa: nunca se superpone con
+    el banner azul superior ni con el pie/leyenda inferior, sin importar el
+    tamaño relativo que tengan esos paneles.
+
+    esquina: "superior-izquierda", "superior-derecha", "inferior-izquierda"
+             o "inferior-derecha".
+    """
+    ruta_logo = Path(ruta_logo)
+    if not ruta_logo.exists():
+        print(f"      AVISO: no se encontró el logo en {ruta_logo}, se omite. "
+              f"Usá --logo <ruta> para indicar la ubicación correcta.")
+        return
+
+    try:
+        img = mpimg.imread(str(ruta_logo))
+    except Exception as e:
+        print(f"      AVISO: no se pudo leer el logo ({e}), se omite.")
+        return
+
+    img = _recortar_bbox_contenido(img)
+
+    # `zoom` de OffsetImage se calibra para que el logo ocupe aproximadamente
+    # `ancho_fraccion` del ancho del panel del mapa, usando el ancho en
+    # píxeles del panel (a partir del tamaño de figura en pulgadas y su DPI)
+    # como referencia. El alto se ajusta solo, de forma automática, porque
+    # OffsetImage preserva la relación de aspecto original del array.
+    fig = ax_mapa.figure
+    bbox_mapa = ax_mapa.get_position()
+    ancho_fig_px = fig.get_size_inches()[0] * fig.dpi
+    ancho_mapa_px = ancho_fig_px * bbox_mapa.width
+    ancho_logo_px_objetivo = ancho_mapa_px * ancho_fraccion
+    ancho_logo_px_original = img.shape[1]
+    zoom = ancho_logo_px_objetivo / ancho_logo_px_original
+
+    esquina = normalizar_texto(esquina).replace(" ", "-")
+    margen = margen_fraccion
+
+    mapa_esquinas = {
+        "superior-izquierda": ((margen, 1 - margen), "left", "top"),
+        "superior-derecha": ((1 - margen, 1 - margen), "right", "top"),
+        "inferior-izquierda": ((margen, margen), "left", "bottom"),
+        "inferior-derecha": ((1 - margen, margen), "right", "bottom"),
+    }
+    (xy, ha, va) = mapa_esquinas.get(esquina, mapa_esquinas["inferior-derecha"])
+
+    # box_alignment ubica la esquina correspondiente de la imagen exactamente
+    # en el punto xy (dado en coordenadas de ejes, 0 a 1), en vez de centrar
+    # la imagen sobre ese punto.
+    align_x = 0.0 if ha == "left" else 1.0
+    align_y = 0.0 if va == "bottom" else 1.0
+
+    imagebox = OffsetImage(img, zoom=zoom)
+    ab = AnnotationBbox(
+        imagebox, xy, xycoords=ax_mapa.transAxes,
+        box_alignment=(align_x, align_y),
+        frameon=False, pad=0.0, zorder=15,
+    )
+    ax_mapa.add_artist(ab)
+
+
 def generar_mapa(
     ruta_geojson: str,
     ruta_salida: str,
@@ -421,6 +528,10 @@ def generar_mapa(
     alto_pulgadas: float,
     dpi: int,
     debug: bool = False,
+    ruta_logo: str | Path | None = None,
+    esquina_logo: str = ESQUINA_LOGO_DEFAULT,
+    ancho_logo_fraccion: float = ANCHO_LOGO_FRACCION,
+    incluir_logo: bool = True,
 ):
     print(f"[1/6] Leyendo geojson de alertas: {ruta_geojson}")
     gdf = cargar_geojson_alertas(ruta_geojson)
@@ -480,6 +591,14 @@ def generar_mapa(
     ax_banner = fig.add_subplot(gs[0, 0])
     ax_mapa = fig.add_subplot(gs[1, 0])
     ax_pie = fig.add_subplot(gs[2, 0])
+
+    # Hace que el banner/mapa/pie ocupen el 100% del lienzo (sin márgenes
+    # automáticos de matplotlib). Esto es fundamental para que las
+    # coordenadas del logo (que se calculan como fracción del lienzo
+    # completo, 0 a 1) coincidan exactamente con la imagen final, ya que
+    # se guarda con bbox_inches="tight" (si quedara un margen sin usar,
+    # el recorte de "tight" desplazaría/cortaría el logo).
+    fig.subplots_adjust(left=0, right=1, top=1, bottom=0, hspace=0, wspace=0)
 
     # ---------------- BANNER SUPERIOR ----------------
     ax_banner.set_xlim(0, 1)
@@ -598,9 +717,20 @@ def generar_mapa(
     for nivel_id, cantidad in conteo.items():
         print(f"      - {nivel_id}: {cantidad}")
 
+    # ---------------- LOGO DEL PROYECTO (esquina configurable) ----------------
+    if incluir_logo:
+        ruta_logo_final = Path(ruta_logo) if ruta_logo else RUTA_LOGO_DEFAULT
+        agregar_logo(
+            ax_mapa, ruta_logo_final, esquina_logo, ancho_logo_fraccion, MARGEN_LOGO_FRACCION,
+        )
+
     print(f"[5/6] Guardando imagen en: {ruta_salida}")
     os.makedirs(os.path.dirname(ruta_salida) or ".", exist_ok=True)
-    fig.savefig(ruta_salida, dpi=dpi, facecolor=COLOR_FONDO_FIGURA, bbox_inches="tight")
+    # NOTA: no se usa bbox_inches="tight" a propósito. Como el layout ya
+    # ocupa el 100% del lienzo (ver subplots_adjust más arriba), "tight"
+    # no aporta nada y además desplazaría las coordenadas absolutas del
+    # logo (que se calculan como fracción de la figura completa).
+    fig.savefig(ruta_salida, dpi=dpi, facecolor=COLOR_FONDO_FIGURA)
     plt.close(fig)
     print("[6/6] ¡Listo!")
 
@@ -678,6 +808,26 @@ def construir_parser() -> argparse.ArgumentParser:
              "Usalo para verificar/corregir el mapeo de colores con tu archivo real.",
     )
     parser.add_argument(
+        "--logo", default=None,
+        help=f"Ruta al archivo de imagen del logo a insertar en una esquina del mapa "
+             f"(default: {RUTA_LOGO_DEFAULT}). Si el archivo no existe, se omite el logo "
+             f"sin interrumpir la generación del mapa.",
+    )
+    parser.add_argument(
+        "--esquina-logo", default=ESQUINA_LOGO_DEFAULT,
+        choices=["superior-izquierda", "superior-derecha", "inferior-izquierda", "inferior-derecha"],
+        help=f"Esquina donde se coloca el logo (default: {ESQUINA_LOGO_DEFAULT!r}).",
+    )
+    parser.add_argument(
+        "--ancho-logo", type=float, default=ANCHO_LOGO_FRACCION,
+        help=f"Ancho del logo como fracción del ancho total de la imagen, entre 0 y 1 "
+             f"(default: {ANCHO_LOGO_FRACCION}).",
+    )
+    parser.add_argument(
+        "--sin-logo", action="store_true",
+        help="No incluye ningún logo en la imagen generada.",
+    )
+    parser.add_argument(
         "--alta-resolucion", action="store_true", default=True,
         help="Usa las capas de referencia de mayor resolución (50m) en lugar de 110m. Activado por defecto.",
     )
@@ -715,6 +865,10 @@ def main():
             alto_pulgadas=args.alto,
             dpi=args.dpi,
             debug=args.debug,
+            ruta_logo=args.logo,
+            esquina_logo=args.esquina_logo,
+            ancho_logo_fraccion=args.ancho_logo,
+            incluir_logo=not args.sin_logo,
         )
     except Exception as e:
         print(f"ERROR: {e}", file=sys.stderr)

@@ -10,3 +10,7 @@ pandas>=2.0
 # pyogrio acelera notablemente la lectura de archivos .geojson grandes
 # con geopandas (opcional pero recomendado).
 pyogrio>=0.7
+
+# Pillow es usado por matplotlib para leer el logo (.png/.jpg) que se
+# inserta en una esquina del mapa.
+Pillow>=10.0

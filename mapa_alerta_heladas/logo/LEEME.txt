@@ -1,0 +1,24 @@
+Colocá acá el archivo del logo de tu proyecto (Proyecto Pampa).
+
+El script busca por defecto un archivo llamado:
+
+    logo_pampa.png
+
+Si tu archivo tiene otro nombre o está en otra carpeta, no hace falta
+moverlo: simplemente indicá la ruta con la opción --logo al ejecutar
+el script, por ejemplo:
+
+    python plot_alerta_heladas.py --geojson coldwarnings.geojson --logo "logo/mi_logo.png"
+
+Recomendaciones:
+- Usá formato .png con fondo transparente si es posible (se ve mejor
+  sobre el mapa).
+- No hace falta que el logo tenga un tamaño específico: el script lo
+  redimensiona automáticamente manteniendo su proporción original.
+
+Para elegir en qué esquina aparece el logo, usá --esquina-logo con una
+de estas opciones: superior-izquierda, superior-derecha,
+inferior-izquierda, inferior-derecha (default).
+
+Para ocultar el logo (por ejemplo, si todavía no tenés el archivo listo),
+usá --sin-logo.
