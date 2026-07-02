@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ColdWarnings · Sistema de Outlooks y Alertas Meteorológicas — Argentina</title>
+<meta name="description" content="Herramienta para emitir outlooks y alertas meteorológicas por provincia y municipio en Argentina, con mapa interactivo y exportación a GeoJSON.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%230b2148'/%3E%3Ctext x='32' y='42' font-size='26' font-family='Arial' font-weight='bold' fill='white' text-anchor='middle'%3ECW%3C/text%3E%3C/svg%3E">
+
+<!-- Leaflet -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<!-- Leaflet.draw -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div id="app">
+
+  <!-- ============ HEADER ============ -->
+  <header id="topbar">
+    <div class="topbar-brand">
+      <div class="brand-mark">CW</div>
+      <div class="brand-text">
+        <h1>ColdWarnings</h1>
+        <p>Sistema de Outlooks y Alertas Meteorológicas por Municipio · Argentina</p>
+      </div>
+    </div>
+    <div class="topbar-clock" id="topbar-clock">--:--:--</div>
+    <div class="topbar-actions">
+      <button class="btn btn-ghost" id="btn-save-project" title="Guardar todo el proyecto (geodatos + boletines) en un archivo .json">💾 Guardar proyecto</button>
+      <button class="btn btn-ghost" id="btn-load-project" title="Cargar un proyecto guardado previamente">📂 Abrir proyecto</button>
+      <input type="file" id="file-project" accept=".json" hidden>
+    </div>
+  </header>
+
+  <div id="layout">
+
+    <!-- ============ SIDEBAR ============ -->
+    <aside id="sidebar">
+      <nav class="tabs" id="tabs">
+        <button class="tab-btn active" data-tab="geodatos">1. Geodatos</button>
+        <button class="tab-btn" data-tab="zona">2. Nueva zona</button>
+        <button class="tab-btn" data-tab="borrador">3. Borrador <span class="badge" id="badge-borrador">0</span></button>
+        <button class="tab-btn" data-tab="emitidos">4. Emitidos <span class="badge" id="badge-emitidos">0</span></button>
+        <button class="tab-btn" data-tab="capas">5. Capas extra</button>
+        <button class="tab-btn" data-tab="exportar">6. Exportar / Importar</button>
+      </nav>
+
+      <div class="tab-panels">
+
+        <!-- ---------- TAB 1: GEODATOS ---------- -->
+        <section class="tab-panel active" id="tab-geodatos">
+          <h2>Límites administrativos</h2>
+          <p class="hint">Cargá tus propios archivos <code>.geojson</code> / <code>.json</code> de la provincia y de los municipios (departamentos, partidos, comunas). El sistema detecta automáticamente el campo de nombre; si no lo encuentra, te lo va a pedir.</p>
+
+          <div class="field-group">
+            <label>Límite de provincia (opcional, solo referencia visual)</label>
+            <div class="file-row">
+              <input type="file" id="file-provincia" accept=".json,.geojson">
+              <button class="btn btn-sm btn-outline" id="btn-clear-provincia">Quitar</button>
+            </div>
+            <div class="status-line" id="status-provincia">Sin cargar</div>
+          </div>
+
+          <div class="field-group">
+            <label>Límites de municipios / departamentos / partidos / comunas</label>
+            <div class="file-row">
+              <input type="file" id="file-municipios" accept=".json,.geojson">
+              <button class="btn btn-sm btn-outline" id="btn-clear-municipios">Quitar</button>
+            </div>
+            <div class="status-line" id="status-municipios">Sin cargar</div>
+          </div>
+
+          <div class="field-group" id="grupo-buscador" hidden>
+            <label>Buscar localidad / municipio</label>
+            <input type="text" id="input-buscar" placeholder="Escribí un nombre y elegí de la lista…" autocomplete="off">
+            <div class="search-results" id="search-results"></div>
+          </div>
+
+          <div class="field-group" id="grupo-stats" hidden>
+            <label>Resumen de la capa cargada</label>
+            <div class="stats-box" id="stats-municipios"></div>
+          </div>
+
+          <div class="field-group" id="grupo-labels" hidden>
+            <label><input type="checkbox" id="chk-mostrar-labels" checked> Mostrar nombres sobre el mapa (con zoom alto)</label>
+          </div>
+
+          <div class="field-group" id="grupo-campo-nombre" hidden>
+            <label>Campo de nombre detectado</label>
+            <div class="status-line" id="status-campo-nombre">—</div>
+            <button class="btn btn-sm btn-outline" id="btn-cambiar-campo-nombre">Cambiar campo de nombre…</button>
+          </div>
+        </section>
+
+        <!-- ---------- TAB 2: NUEVA ZONA ---------- -->
+        <section class="tab-panel" id="tab-zona">
+          <h2 id="zona-form-title">Definir zona de aviso</h2>
+          <p class="hint">Elegí el fenómeno, el nivel y el área geográfica afectada. Podés combinar municipios, un polígono libre y/o un círculo de radio, y luego agregar la zona al boletín en borrador.</p>
+
+          <div class="field-group">
+            <label>Tipo de producto</label>
+            <select id="select-tipo-producto">
+              <option value="nivel">Aviso por niveles (estilo SMN: Amarillo / Naranja / Rojo)</option>
+              <option value="probabilidad">Outlook probabilístico (estilo NWS: %)</option>
+            </select>
+          </div>
+
+          <div class="field-group">
+            <label>Nivel</label>
+            <div id="nivel-swatches" class="swatch-row"></div>
+          </div>
+
+          <div class="field-group">
+            <label>Fenómeno</label>
+            <select id="select-fenomeno"></select>
+            <input type="text" id="input-fenomeno-otro" placeholder="Especificar fenómeno…" hidden>
+          </div>
+
+          <div class="field-group">
+            <label>Detalle / discusión meteorológica</label>
+            <textarea id="input-detalle-zona" rows="3" placeholder="Ej: Se prevén acumulados de nieve entre 5 y 15 cm, con vientos del sector sur superiores a 60 km/h..."></textarea>
+          </div>
+
+          <div class="field-group">
+            <label>Modo de selección geográfica</label>
+            <div class="mode-row">
+              <button class="mode-btn active" data-mode="municipios">🏙️ Municipios</button>
+              <button class="mode-btn" data-mode="draw">✏️ Polígono libre</button>
+              <button class="mode-btn" data-mode="circulo">⭕ Círculo (radio)</button>
+            </div>
+          </div>
+
+          <div class="field-group" id="panel-mode-municipios">
+            <label>Municipios seleccionados (<span id="count-municipios-sel">0</span>)</label>
+            <input type="text" id="filtro-lista-municipios" placeholder="Filtrar lista…" autocomplete="off">
+            <div class="muni-list" id="muni-list"></div>
+            <div class="mini-actions">
+              <button class="btn btn-sm btn-outline" id="btn-select-view">Seleccionar visibles en el mapa</button>
+              <button class="btn btn-sm btn-outline" id="btn-clear-sel-municipios">Vaciar selección</button>
+            </div>
+          </div>
+
+          <div class="field-group" id="panel-mode-draw" hidden>
+            <p class="hint">Usá la herramienta de dibujo (icono ✏️ en la esquina superior izquierda del mapa) para trazar uno o varios polígonos.</p>
+            <div class="status-line" id="status-draw">Polígonos dibujados: 0</div>
+            <button class="btn btn-sm btn-outline" id="btn-clear-draw">Borrar polígonos dibujados</button>
+          </div>
+
+          <div class="field-group" id="panel-mode-circulo" hidden>
+            <p class="hint">Hacé clic en el mapa para ubicar el centro del círculo.</p>
+            <label>Radio (km): <span id="label-radio-km">25</span></label>
+            <input type="range" id="input-radio-km" min="1" max="300" value="25">
+            <div class="status-line" id="status-circulo">Centro: sin definir</div>
+            <button class="btn btn-sm btn-outline" id="btn-add-circulo">Agregar círculo a la zona</button>
+            <button class="btn btn-sm btn-outline" id="btn-clear-circulos">Borrar círculos</button>
+          </div>
+
+          <div class="field-group actions-sticky">
+            <button class="btn btn-primary btn-block" id="btn-agregar-zona">➕ Agregar zona al boletín en borrador</button>
+            <button class="btn btn-ghost btn-block" id="btn-cancelar-edicion-zona" hidden>Cancelar edición</button>
+          </div>
+        </section>
+
+        <!-- ---------- TAB 3: BORRADOR ---------- -->
+        <section class="tab-panel" id="tab-borrador">
+          <h2>Boletín en borrador</h2>
+
+          <div class="field-group">
+            <label>Título del boletín</label>
+            <input type="text" id="input-bol-titulo" placeholder="Ej: Outlook de Tormenta Invernal — Región Pampeana">
+          </div>
+
+          <div class="field-group two-col">
+            <div>
+              <label>Válido desde</label>
+              <input type="datetime-local" id="input-bol-desde">
+            </div>
+            <div>
+              <label>Válido hasta</label>
+              <input type="datetime-local" id="input-bol-hasta">
+            </div>
+          </div>
+
+          <div class="field-group">
+            <label>Organismo emisor</label>
+            <input type="text" id="input-bol-emisor" placeholder="Ej: Defensa Civil Municipal / SMN / Comité de Emergencias" value="Servicio Meteorológico Nacional">
+          </div>
+
+          <div class="field-group">
+            <label>Resumen / discusión general</label>
+            <textarea id="input-bol-resumen" rows="3" placeholder="Contexto sinóptico general del boletín…"></textarea>
+          </div>
+
+          <div class="field-group">
+            <label>Zonas incluidas (<span id="count-zonas-borrador">0</span>)</label>
+            <div class="zone-list" id="zone-list"></div>
+          </div>
+
+          <div class="field-group actions-sticky">
+            <button class="btn btn-success btn-block" id="btn-publicar-boletin">📢 Publicar boletín</button>
+            <button class="btn btn-ghost btn-block" id="btn-vaciar-borrador">Vaciar borrador</button>
+          </div>
+        </section>
+
+        <!-- ---------- TAB 4: EMITIDOS ---------- -->
+        <section class="tab-panel" id="tab-emitidos">
+          <h2>Boletines emitidos</h2>
+          <div class="field-group">
+            <label>Boletín destacado en el encabezado del mapa</label>
+            <select id="select-bol-destacado">
+              <option value="">— Ninguno —</option>
+            </select>
+          </div>
+          <div class="bulletin-list" id="bulletin-list">
+            <p class="hint">Todavía no publicaste ningún boletín.</p>
+          </div>
+        </section>
+
+        <!-- ---------- TAB 5: CAPAS EXTRA ---------- -->
+        <section class="tab-panel" id="tab-capas">
+          <h2>Capas de referencia adicionales</h2>
+          <p class="hint">Sumá capas .geojson auxiliares (rutas, ríos, cuencas, radares, estaciones, etc.) puramente decorativas / de contexto.</p>
+          <div class="field-group">
+            <div class="file-row">
+              <input type="file" id="file-extra" accept=".json,.geojson">
+              <input type="color" id="color-extra" value="#5b8def" title="Color de la capa">
+            </div>
+          </div>
+          <div class="extra-layer-list" id="extra-layer-list"></div>
+        </section>
+
+        <!-- ---------- TAB 6: EXPORTAR / IMPORTAR ---------- -->
+        <section class="tab-panel" id="tab-exportar">
+          <h2>Exportar</h2>
+
+          <div class="field-group">
+            <label>Boletín a exportar</label>
+            <select id="select-bol-export">
+              <option value="__borrador__">Boletín en borrador (sin publicar)</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <button class="btn btn-primary btn-block" id="btn-export-geojson">⬇ Exportar boletín seleccionado (.geojson)</button>
+            <button class="btn btn-outline btn-block" id="btn-export-all-geojson">⬇ Exportar TODOS los boletines emitidos (.geojson)</button>
+            <button class="btn btn-outline btn-block" id="btn-export-png">🖼 Exportar imagen del boletín (.png)</button>
+          </div>
+          <p class="hint">Para que la exportación de imagen funcione correctamente (sin bloqueos de origen cruzado), usá el mapa base "Claro (CARTO)" o "Satélite (Esri)".</p>
+
+          <h2>Importar</h2>
+          <div class="field-group">
+            <label>Importar boletines desde un .geojson exportado por ColdWarnings</label>
+            <input type="file" id="file-import-geojson" accept=".json,.geojson">
+          </div>
+        </section>
+
+      </div>
+    </aside>
+
+    <!-- ============ MAPA / BOLETÍN VISUAL ============ -->
+    <main id="mapcolumn">
+      <div id="bulletin-card">
+        <div id="bulletin-banner">
+          <div class="banner-line-1" id="banner-title">Sin boletín destacado — cargá geodatos y creá una zona para comenzar</div>
+          <div class="banner-line-2" id="banner-subtitle">&nbsp;</div>
+        </div>
+
+        <div id="map-toolbar">
+          <div class="toolbar-group">
+            <button class="btn btn-xs btn-outline" id="btn-fit-argentina">🇦🇷 Vista Argentina</button>
+            <button class="btn btn-xs btn-outline" id="btn-fit-provincia">Ajustar a provincia</button>
+            <button class="btn btn-xs btn-outline" id="btn-fit-municipios">Ajustar a municipios</button>
+            <button class="btn btn-xs btn-outline" id="btn-fit-boletin">Ajustar a boletín destacado</button>
+          </div>
+          <div class="toolbar-group">
+            <label for="select-basemap" style="font-size:11px;color:var(--muted);align-self:center;">Mapa base:</label>
+            <select id="select-basemap" class="btn-xs" style="border:1px solid var(--border-strong);border-radius:6px;padding:4px 6px;"></select>
+          </div>
+        </div>
+
+        <div id="map"></div>
+
+        <div id="bulletin-footer">
+          <div class="legend-swatches" id="footer-legend">Sin niveles activos</div>
+          <div class="footer-credit">
+            <span id="footer-issued">—</span><br>
+            <span>Generado con <b>ColdWarnings</b> · No es un producto oficial del SMN</span>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ============ MODAL GENÉRICO ============ -->
+<div id="modal-overlay" class="hidden">
+  <div id="modal-box">
+    <button id="modal-close">✕</button>
+    <div id="modal-content"></div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<!-- Librerías -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+<script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+<script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+
+<!-- App -->
+<script src="js/state.js"></script>
+<script src="js/geo-utils.js"></script>
+<script src="js/map.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/export.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
