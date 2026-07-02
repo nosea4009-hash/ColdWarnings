@@ -50,7 +50,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
+import re
 import sys
 import textwrap
 from pathlib import Path
@@ -61,9 +63,12 @@ matplotlib.use("Agg")  # backend sin ventana, ideal para generar PNG en cualquie
 
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as fm
+import matplotlib.image as mpimg
 from matplotlib.patches import Rectangle
 from matplotlib.lines import Line2D
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 
+import numpy as np
 import geopandas as gpd
 import pandas as pd
 from shapely.geometry import box
@@ -87,6 +92,7 @@ RUTA_RIOS_110M = CARPETA_DATA / "ne_110m_rivers_lake_centerlines.geojson"
 RUTA_RIOS_50M = CARPETA_DATA / "ne_50m_rivers_lake_centerlines.geojson"
 
 # --- Textos del banner y del pie --------------------------------------------
+NOMBRE_PROYECTO = "P.A.M.P.A."  # se muestra al comienzo del banner superior
 TITULO_BANNER = "Alerta por Clima Frío y Heladas"
 SUBTITULO_BANNER = "Válido a las 24hs del día 03/07/26"
 TITULO_LEYENDA_PIE = "Probabilidad Máxima de Superar el Criterio de Aviso"
@@ -107,6 +113,23 @@ COLOR_TEXTO_OSCURO = "#1a1a1a"
 COLOR_BANNER_AZUL = "#12225c"       # azul oscuro tipo NOAA/NWS
 COLOR_BANNER_BORDE = "#000000"
 
+# --- Logo del proyecto -------------------------------------------------------
+# Ruta por defecto donde el script busca el logo, si no se indica --logo por
+# línea de comandos. Colocá tu archivo de logo (.png, con fondo transparente
+# idealmente) en la carpeta de esta configuración, o cambiá la ruta acá.
+RUTA_LOGO_DEFAULT = CARPETA_BASE / "logo" / "logo_pampa.png"
+
+# Esquina donde se dibuja el logo sobre la figura completa. Opciones válidas:
+# "superior-izquierda", "superior-derecha", "inferior-izquierda", "inferior-derecha"
+ESQUINA_LOGO_DEFAULT = "inferior-derecha"
+
+# Ancho del logo, como fracción del ancho total de la figura (0 a 1).
+# El alto se ajusta automáticamente para mantener la proporción original del logo.
+ANCHO_LOGO_FRACCION = 0.09
+
+# Margen entre el logo y el borde de la figura, como fracción del ancho total.
+MARGEN_LOGO_FRACCION = 0.012
+
 # --- Niveles de alerta por clima frío / heladas -----------------------------
 # Reemplaza la escala de "probabilidad de nieve" del NWS por una escala de
 # alerta por frío/heladas. Se mantiene la MISMA paleta de colores de
@@ -122,31 +145,48 @@ COLOR_BANNER_BORDE = "#000000"
 NIVELES_ALERTA = [
     {
         "id": "sin_riesgo",
-        "valores": ["sin riesgo", "ninguno", "sin alerta", "s/riesgo", "<10%", "bajo", "0"],
+        "valores": [
+            "sin riesgo", "ninguno", "sin alerta", "s/riesgo", "s/alerta",
+            "<10%", "bajo", "verde", "sin aviso", "normal", "nivel 0", "nivel0",
+        ],
         "etiqueta": "<10%",
         "color": "#ffffff",
     },
     {
         "id": "vigilancia",
-        "valores": ["vigilancia", "amarillo claro", "10-30%", "10 - 30%", "leve", "1"],
+        "valores": [
+            "vigilancia", "amarillo claro", "10-30%", "10 - 30%", "10 a 30%",
+            "leve", "nivel 1", "nivel1",
+        ],
         "etiqueta": "10-30%",
         "color": "#4fc3c8",
     },
     {
         "id": "alerta_amarilla",
-        "valores": ["amarillo", "alerta amarilla", "moderado", "30-50%", "30 - 50%", "2"],
+        "valores": [
+            "amarillo", "amarilla", "alerta amarilla", "aviso amarillo",
+            "moderado", "30-50%", "30 - 50%", "30 a 50%", "nivel 2", "nivel2",
+        ],
         "etiqueta": "30-50%",
         "color": "#fff066",
     },
     {
         "id": "alerta_roja",
-        "valores": ["rojo", "alerta roja", "severo", "50-80%", "50 - 80%", "naranja", "alerta naranja", "3"],
+        "valores": [
+            "rojo", "roja", "alerta roja", "aviso rojo", "severo",
+            "50-80%", "50 - 80%", "50 a 80%",
+            "naranja", "alerta naranja", "aviso naranja", "nivel 3", "nivel3",
+        ],
         "etiqueta": "50-80%",
         "color": "#e0342a",
     },
     {
         "id": "alerta_extrema",
-        "valores": [">80%", "extremo", "violeta", "morado", "critico", "crítico", "4"],
+        "valores": [
+            ">80%", "extremo", "extrema", "violeta", "morado", "purpura",
+            "púrpura", "critico", "crítico", "critica", "crítica",
+            "nivel 4", "nivel4",
+        ],
         "etiqueta": ">80%",
         "color": "#8a2be2",
     },
@@ -180,24 +220,88 @@ def normalizar_texto(txt) -> str:
     return txt
 
 
+# Mapeo directo para códigos numéricos de nivel (0 a 4), si la columna del
+# geojson usa enteros o floats (ej. 0, 1, 2, 3, 4 o "1.0", "2.0", etc.)
+# en vez de texto. Se maneja aparte para evitar falsos positivos por
+# comparación de substrings (ej. que el "0" de "sin riesgo" "matchee"
+# dentro de "10-30%").
+_ID_NIVEL_POR_INDICE = [
+    "sin_riesgo", "vigilancia", "alerta_amarilla", "alerta_roja", "alerta_extrema",
+]
+
+
+def _intentar_valor_numerico(valor_crudo):
+    """Si el valor crudo es interpretable como número (0, 1, 2, 3, 4 ó sus
+    variantes en float/string), devuelve el id de nivel correspondiente.
+    Si no es numérico, devuelve None."""
+    try:
+        numero = float(str(valor_crudo).strip().replace(",", "."))
+    except (TypeError, ValueError):
+        return None
+    if math.isnan(numero):
+        return None
+    indice = int(round(numero))
+    if 0 <= indice <= 4 and abs(numero - indice) < 1e-6:
+        return _ID_NIVEL_POR_INDICE[indice]
+    return None
+
+
+def _id_a_color(id_nivel: str) -> str:
+    for nivel in NIVELES_ALERTA:
+        if nivel["id"] == id_nivel:
+            return nivel["color"]
+    return COLOR_SIN_DATO
+
+
 def mapear_nivel_a_color(valor_crudo) -> tuple[str, str]:
     """Dado el valor crudo de la columna de nivel de alerta de un municipio,
     devuelve (id_nivel, color_hex) según la tabla NIVELES_ALERTA.
     Si no coincide con ningún nivel conocido, devuelve ("sin_dato", COLOR_SIN_DATO).
+
+    IMPORTANTE: la comparación se hace por COINCIDENCIA EXACTA de la palabra/
+    frase normalizada (no por "contiene"), para evitar falsos positivos como
+    que el candidato "0" matchee dentro de "10-30%", o que "amarillo" matchee
+    dentro de "amarillo claro" de otro nivel. Sólo se permite una coincidencia
+    "floja" (parcial, por palabra completa) como último recurso, cuando el
+    valor viene acompañado de texto extra (ej. "Alerta Roja - Heladas").
     """
+    if valor_crudo is None:
+        return "sin_dato", COLOR_SIN_DATO
+
+    # 1) Si es un código numérico (0-4), resolverlo directamente sin ambigüedad.
+    id_numerico = _intentar_valor_numerico(valor_crudo)
+    if id_numerico is not None:
+        return id_numerico, _id_a_color(id_numerico)
+
     v = normalizar_texto(valor_crudo)
     if not v:
         return "sin_dato", COLOR_SIN_DATO
+
+    # 2) Coincidencia EXACTA del texto completo (ignorando mayúsculas/tildes).
     for nivel in NIVELES_ALERTA:
         for candidato in nivel["valores"]:
             if normalizar_texto(candidato) == v:
                 return nivel["id"], nivel["color"]
-    # Coincidencia parcial (por si el valor viene con texto extra, ej. "Alerta Roja - Heladas")
+
+    # 3) Coincidencia por PALABRA COMPLETA dentro de una frase más larga
+    #    (ej. "Alerta Roja - Heladas" contiene la palabra "roja" completa).
+    #    Se usan límites de palabra (\b) para no matchear substrings sueltos.
+    #    Se evalúan los candidatos ordenados por longitud descendente para
+    #    priorizar coincidencias más específicas (ej. "amarillo claro" antes
+    #    que "amarillo").
+    candidatos_ordenados = []
     for nivel in NIVELES_ALERTA:
         for candidato in nivel["valores"]:
             c = normalizar_texto(candidato)
-            if c and (c in v or v in c):
-                return nivel["id"], nivel["color"]
+            if c and not c.replace(".", "").isdigit():  # los numéricos ya se resolvieron arriba
+                candidatos_ordenados.append((len(c), c, nivel["id"], nivel["color"]))
+    candidatos_ordenados.sort(key=lambda t: t[0], reverse=True)
+
+    for _, c, nivel_id, color in candidatos_ordenados:
+        patron = r"\b" + re.escape(c) + r"\b"
+        if re.search(patron, v):
+            return nivel_id, color
+
     return "sin_dato", COLOR_SIN_DATO
 
 
@@ -322,6 +426,93 @@ def construir_leyenda_pie(ax_leyenda, niveles_usados: list[dict]):
         )
 
 
+def _recortar_bbox_contenido(img):
+    """Recorta los márgenes totalmente transparentes/vacíos alrededor del
+    contenido real de un logo (para que un PNG con mucho espacio en blanco/
+    transparente alrededor del dibujo no se vea "diminuto" o desplazado al
+    insertarlo en un recuadro pequeño). Si la imagen no tiene canal alfa,
+    se devuelve sin cambios."""
+    try:
+        if img.ndim == 3 and img.shape[2] == 4:
+            alfa = img[:, :, 3]
+            filas = np.where(alfa.max(axis=1) > 0.02)[0]
+            columnas = np.where(alfa.max(axis=0) > 0.02)[0]
+            if filas.size and columnas.size:
+                r0, r1 = filas[0], filas[-1] + 1
+                c0, c1 = columnas[0], columnas[-1] + 1
+                return img[r0:r1, c0:c1]
+    except Exception:
+        pass
+    return img
+
+
+def agregar_logo(ax_mapa, ruta_logo: str | Path, esquina: str, ancho_fraccion: float, margen_fraccion: float):
+    """Dibuja el logo del proyecto en una de las cuatro esquinas DEL PANEL
+    DEL MAPA (no de la figura completa), usando OffsetImage/AnnotationBbox.
+
+    Se usa esta técnica (en vez de ejes anidados) porque respeta
+    automáticamente la relación de aspecto real del logo sin necesidad de
+    calcular manualmente anchos/altos en pulgadas, y porque se ancla a
+    coordenadas de "axes fraction" del propio mapa: nunca se superpone con
+    el banner azul superior ni con el pie/leyenda inferior, sin importar el
+    tamaño relativo que tengan esos paneles.
+
+    esquina: "superior-izquierda", "superior-derecha", "inferior-izquierda"
+             o "inferior-derecha".
+    """
+    ruta_logo = Path(ruta_logo)
+    if not ruta_logo.exists():
+        print(f"      AVISO: no se encontró el logo en {ruta_logo}, se omite. "
+              f"Usá --logo <ruta> para indicar la ubicación correcta.")
+        return
+
+    try:
+        img = mpimg.imread(str(ruta_logo))
+    except Exception as e:
+        print(f"      AVISO: no se pudo leer el logo ({e}), se omite.")
+        return
+
+    img = _recortar_bbox_contenido(img)
+
+    # `zoom` de OffsetImage se calibra para que el logo ocupe aproximadamente
+    # `ancho_fraccion` del ancho del panel del mapa, usando el ancho en
+    # píxeles del panel (a partir del tamaño de figura en pulgadas y su DPI)
+    # como referencia. El alto se ajusta solo, de forma automática, porque
+    # OffsetImage preserva la relación de aspecto original del array.
+    fig = ax_mapa.figure
+    bbox_mapa = ax_mapa.get_position()
+    ancho_fig_px = fig.get_size_inches()[0] * fig.dpi
+    ancho_mapa_px = ancho_fig_px * bbox_mapa.width
+    ancho_logo_px_objetivo = ancho_mapa_px * ancho_fraccion
+    ancho_logo_px_original = img.shape[1]
+    zoom = ancho_logo_px_objetivo / ancho_logo_px_original
+
+    esquina = normalizar_texto(esquina).replace(" ", "-")
+    margen = margen_fraccion
+
+    mapa_esquinas = {
+        "superior-izquierda": ((margen, 1 - margen), "left", "top"),
+        "superior-derecha": ((1 - margen, 1 - margen), "right", "top"),
+        "inferior-izquierda": ((margen, margen), "left", "bottom"),
+        "inferior-derecha": ((1 - margen, margen), "right", "bottom"),
+    }
+    (xy, ha, va) = mapa_esquinas.get(esquina, mapa_esquinas["inferior-derecha"])
+
+    # box_alignment ubica la esquina correspondiente de la imagen exactamente
+    # en el punto xy (dado en coordenadas de ejes, 0 a 1), en vez de centrar
+    # la imagen sobre ese punto.
+    align_x = 0.0 if ha == "left" else 1.0
+    align_y = 0.0 if va == "bottom" else 1.0
+
+    imagebox = OffsetImage(img, zoom=zoom)
+    ab = AnnotationBbox(
+        imagebox, xy, xycoords=ax_mapa.transAxes,
+        box_alignment=(align_x, align_y),
+        frameon=False, pad=0.0, zorder=15,
+    )
+    ax_mapa.add_artist(ab)
+
+
 def generar_mapa(
     ruta_geojson: str,
     ruta_salida: str,
@@ -330,11 +521,17 @@ def generar_mapa(
     titulo_banner: str,
     subtitulo_banner: str,
     titulo_leyenda: str,
+    nombre_proyecto: str,
     mostrar_nombres_municipios: bool,
     usar_alta_res: bool,
     ancho_pulgadas: float,
     alto_pulgadas: float,
     dpi: int,
+    debug: bool = False,
+    ruta_logo: str | Path | None = None,
+    esquina_logo: str = ESQUINA_LOGO_DEFAULT,
+    ancho_logo_fraccion: float = ANCHO_LOGO_FRACCION,
+    incluir_logo: bool = True,
 ):
     print(f"[1/6] Leyendo geojson de alertas: {ruta_geojson}")
     gdf = cargar_geojson_alertas(ruta_geojson)
@@ -360,6 +557,18 @@ def generar_mapa(
         gdf["_nivel_id"] = resultado.apply(lambda t: t[0])
         gdf["_color"] = resultado.apply(lambda t: t[1])
 
+    if debug and col_nivel is not None:
+        print("\n      ==== MODO DEBUG: valores crudos -> nivel asignado -> color ====")
+        tabla = (
+            gdf[[col_nivel, "_nivel_id", "_color"]]
+            .assign(**{col_nivel: gdf[col_nivel].astype(str)})
+            .drop_duplicates()
+            .sort_values(by="_nivel_id")
+        )
+        for _, fila in tabla.iterrows():
+            print(f"      valor crudo={fila[col_nivel]!r:25s} -> nivel={fila['_nivel_id']:16s} -> color={fila['_color']}")
+        print("      " + "=" * 65 + "\n")
+
     bounds = gdf.total_bounds  # minx, miny, maxx, maxy
     bounds_margen = calcular_margen(bounds, factor=0.10)
 
@@ -383,6 +592,14 @@ def generar_mapa(
     ax_mapa = fig.add_subplot(gs[1, 0])
     ax_pie = fig.add_subplot(gs[2, 0])
 
+    # Hace que el banner/mapa/pie ocupen el 100% del lienzo (sin márgenes
+    # automáticos de matplotlib). Esto es fundamental para que las
+    # coordenadas del logo (que se calculan como fracción del lienzo
+    # completo, 0 a 1) coincidan exactamente con la imagen final, ya que
+    # se guarda con bbox_inches="tight" (si quedara un margen sin usar,
+    # el recorte de "tight" desplazaría/cortaría el logo).
+    fig.subplots_adjust(left=0, right=1, top=1, bottom=0, hspace=0, wspace=0)
+
     # ---------------- BANNER SUPERIOR ----------------
     ax_banner.set_xlim(0, 1)
     ax_banner.set_ylim(0, 1)
@@ -391,7 +608,10 @@ def generar_mapa(
         Rectangle((0, 0), 1, 1, facecolor=COLOR_BANNER_AZUL, edgecolor=COLOR_BANNER_BORDE,
                    linewidth=1.2, transform=ax_banner.transAxes, zorder=1)
     )
-    texto_banner = f"{titulo_banner} -- {subtitulo_banner}"
+    if nombre_proyecto:
+        texto_banner = f"{nombre_proyecto} -- {titulo_banner} -- {subtitulo_banner}"
+    else:
+        texto_banner = f"{titulo_banner} -- {subtitulo_banner}"
     ax_banner.text(
         0.015, 0.5, texto_banner, ha="left", va="center",
         fontsize=15, fontweight="bold", color="white",
@@ -497,9 +717,20 @@ def generar_mapa(
     for nivel_id, cantidad in conteo.items():
         print(f"      - {nivel_id}: {cantidad}")
 
+    # ---------------- LOGO DEL PROYECTO (esquina configurable) ----------------
+    if incluir_logo:
+        ruta_logo_final = Path(ruta_logo) if ruta_logo else RUTA_LOGO_DEFAULT
+        agregar_logo(
+            ax_mapa, ruta_logo_final, esquina_logo, ancho_logo_fraccion, MARGEN_LOGO_FRACCION,
+        )
+
     print(f"[5/6] Guardando imagen en: {ruta_salida}")
     os.makedirs(os.path.dirname(ruta_salida) or ".", exist_ok=True)
-    fig.savefig(ruta_salida, dpi=dpi, facecolor=COLOR_FONDO_FIGURA, bbox_inches="tight")
+    # NOTA: no se usa bbox_inches="tight" a propósito. Como el layout ya
+    # ocupa el 100% del lienzo (ver subplots_adjust más arriba), "tight"
+    # no aporta nada y además desplazaría las coordenadas absolutas del
+    # logo (que se calculan como fracción de la figura completa).
+    fig.savefig(ruta_salida, dpi=dpi, facecolor=COLOR_FONDO_FIGURA)
     plt.close(fig)
     print("[6/6] ¡Listo!")
 
@@ -561,9 +792,40 @@ def construir_parser() -> argparse.ArgumentParser:
         help=f"Título de la leyenda del pie (default: {TITULO_LEYENDA_PIE!r}).",
     )
     parser.add_argument(
+        "--nombre-proyecto", default=NOMBRE_PROYECTO,
+        help=f"Nombre del proyecto que se muestra al inicio del banner azul "
+             f"(default: {NOMBRE_PROYECTO!r}). Usá --nombre-proyecto \"\" para ocultarlo.",
+    )
+    parser.add_argument(
         "--mostrar-nombres", action="store_true",
         help="Muestra el nombre de cada municipio sobre el mapa (recomendado solo si "
              "hay pocas unidades geográficas, para no saturar el mapa).",
+    )
+    parser.add_argument(
+        "--debug", action="store_true",
+        help="Imprime en la terminal cada valor único de la columna de nivel de alerta "
+             "de tu geojson, junto con el nivel y color que el script le asignó. "
+             "Usalo para verificar/corregir el mapeo de colores con tu archivo real.",
+    )
+    parser.add_argument(
+        "--logo", default=None,
+        help=f"Ruta al archivo de imagen del logo a insertar en una esquina del mapa "
+             f"(default: {RUTA_LOGO_DEFAULT}). Si el archivo no existe, se omite el logo "
+             f"sin interrumpir la generación del mapa.",
+    )
+    parser.add_argument(
+        "--esquina-logo", default=ESQUINA_LOGO_DEFAULT,
+        choices=["superior-izquierda", "superior-derecha", "inferior-izquierda", "inferior-derecha"],
+        help=f"Esquina donde se coloca el logo (default: {ESQUINA_LOGO_DEFAULT!r}).",
+    )
+    parser.add_argument(
+        "--ancho-logo", type=float, default=ANCHO_LOGO_FRACCION,
+        help=f"Ancho del logo como fracción del ancho total de la imagen, entre 0 y 1 "
+             f"(default: {ANCHO_LOGO_FRACCION}).",
+    )
+    parser.add_argument(
+        "--sin-logo", action="store_true",
+        help="No incluye ningún logo en la imagen generada.",
     )
     parser.add_argument(
         "--alta-resolucion", action="store_true", default=True,
@@ -596,11 +858,17 @@ def main():
             titulo_banner=args.titulo,
             subtitulo_banner=args.subtitulo,
             titulo_leyenda=args.titulo_leyenda,
+            nombre_proyecto=args.nombre_proyecto,
             mostrar_nombres_municipios=args.mostrar_nombres,
             usar_alta_res=args.alta_resolucion,
             ancho_pulgadas=args.ancho,
             alto_pulgadas=args.alto,
             dpi=args.dpi,
+            debug=args.debug,
+            ruta_logo=args.logo,
+            esquina_logo=args.esquina_logo,
+            ancho_logo_fraccion=args.ancho_logo,
+            incluir_logo=not args.sin_logo,
         )
     except Exception as e:
         print(f"ERROR: {e}", file=sys.stderr)

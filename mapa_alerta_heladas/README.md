@@ -7,7 +7,8 @@ productos del **NWS / WPC** (por ejemplo, el *"Winter Storm Outlook"*), pero:
 - **En español.**
 - Enfocado en **clima frío y heladas** (no en nevadas).
 - Con el banner superior en el texto exacto:
-  **"Alerta por Clima Frío y Heladas -- Válido a las 24hs del día 03/07/26"**.
+  **"P.A.M.P.A. -- Alerta por Clima Frío y Heladas -- Válido a las 24hs del día 03/07/26"**.
+  (El nombre del proyecto `P.A.M.P.A.` se puede cambiar u ocultar con `--nombre-proyecto`.)
 - Con los mismos colores de referencia (blanco / celeste / amarillo / rojo /
   violeta) en la leyenta de niveles.
 - Con el basemap (continentes) en color `#f0eceb` y el mar/océano/ríos/lagos
@@ -124,6 +125,31 @@ Podés editar esta tabla directamente en el script (bloque
 `NIVELES_ALERTA`, al principio del archivo) si tus propios valores son muy
 distintos, o si querés cambiar los colores.
 
+### 🔍 Si los colores salen mezclados o "cruzados"
+
+Si notás que un color aparece donde no corresponde (por ejemplo el rojo en
+vez del celeste), lo más probable es que tu columna de nivel tenga valores
+que el script no reconoce exactamente. Usá el modo `--debug` para ver, en la
+terminal, la lista de **todos los valores únicos** de tu columna y el color
+que el script les asignó:
+
+```bash
+python plot_alerta_heladas.py --geojson mis_municipios.geojson --debug
+```
+
+Vas a ver algo así:
+
+```
+==== MODO DEBUG: valores crudos -> nivel asignado -> color ====
+valor crudo='Amarillo'          -> nivel=alerta_amarilla  -> color=#fff066
+valor crudo='Rojo'              -> nivel=alerta_roja      -> color=#e0342a
+valor crudo='Sin dato'          -> nivel=sin_dato         -> color=#ffffff
+```
+
+Si ves algún valor que quedó como `sin_dato` (o mapeado al nivel
+incorrecto), agregá esa palabra/frase exacta a la lista `valores` del nivel
+correspondiente dentro de `NIVELES_ALERTA` en `plot_alerta_heladas.py`.
+
 ## 🧪 Probar rápido con el geojson de ejemplo
 
 Este repo incluye un `.geojson` de ejemplo (municipios ficticios en grilla)
@@ -143,7 +169,10 @@ python plot_alerta_heladas.py --geojson ejemplo/municipios_ejemplo.geojson --mos
 --titulo TEXTO            Título principal del banner azul.
 --subtitulo TEXTO         Subtítulo de vigencia del banner azul.
 --titulo-leyenda TEXTO    Título de la leyenda inferior.
+--nombre-proyecto TEXTO   Nombre del proyecto al inicio del banner azul (default: "P.A.M.P.A.").
+                          Usá --nombre-proyecto "" para ocultarlo.
 --mostrar-nombres         Muestra el nombre de cada municipio sobre el mapa.
+--debug                   Muestra en la terminal el mapeo valor->nivel->color de tu geojson.
 --alta-resolucion         Usa capas de referencia de 50m (default).
 --baja-resolucion         Usa capas de referencia de 110m (más livianas/rápidas).
 --ancho FLOAT             Ancho de la imagen en pulgadas (default 12.8).
@@ -157,6 +186,41 @@ python plot_alerta_heladas.py --geojson ejemplo/municipios_ejemplo.geojson --mos
 python plot_alerta_heladas.py --geojson mis_municipios.geojson \
     --subtitulo "Válido a las 24hs del día 05/07/26"
 ```
+
+## 🖼️ Logo del proyecto
+
+El script puede insertar automáticamente un logo en una de las cuatro
+esquinas **del panel del mapa** (nunca se superpone con el banner azul ni
+con la leyenda inferior).
+
+1. Colocá tu archivo de logo (idealmente `.png` con fondo transparente)
+   dentro de la carpeta `logo/`, con el nombre `logo_pampa.png` (o el nombre
+   que prefieras).
+2. Si usaste el nombre y la carpeta por defecto, no necesitás pasar ningún
+   parámetro extra: el logo se agrega solo.
+3. Si tu archivo está en otro lado o tiene otro nombre, indicálo con
+   `--logo`:
+   ```bash
+   python plot_alerta_heladas.py --geojson coldwarnings.geojson --logo "logo/mi_logo.png"
+   ```
+4. Para elegir la esquina, usá `--esquina-logo` con una de estas opciones:
+   `superior-izquierda`, `superior-derecha`, `inferior-izquierda`,
+   `inferior-derecha` (default).
+   ```bash
+   python plot_alerta_heladas.py --geojson coldwarnings.geojson --esquina-logo superior-derecha
+   ```
+5. Para ajustar el tamaño del logo (fracción del ancho del mapa, entre 0 y 1):
+   ```bash
+   python plot_alerta_heladas.py --geojson coldwarnings.geojson --ancho-logo 0.12
+   ```
+6. Para no incluir ningún logo:
+   ```bash
+   python plot_alerta_heladas.py --geojson coldwarnings.geojson --sin-logo
+   ```
+
+Si el archivo del logo no existe en la ruta indicada, el script muestra un
+aviso en la terminal y sigue generando el mapa normalmente (sin logo), en
+vez de fallar.
 
 ## 🎨 Personalización de colores
 
